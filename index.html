@@ -1,0 +1,2391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1B4332">
+<title>M&R Field Block</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --g900:#1B4332;--g800:#2D6A4F;--g600:#40916C;--g400:#52B788;
+  --g100:#D8F3DC;--g50:#F0FDF4;
+  --amber:#92400E;--amber-bg:#FFFBEB;
+  --red:#991B1B;--red-bg:#FEF2F2;
+  --tx:#111827;--tx2:#374151;--tx3:#6B7280;--tx4:#9CA3AF;
+  --bg:#F3F4F0;--surf:#fff;--bd:#E5E7EB;
+  --sh:0 1px 3px rgba(0,0,0,.08);
+  --shmd:0 4px 14px rgba(0,0,0,.1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--tx)}
+a{color:var(--g600);text-decoration:none}
+
+/* HEADER */
+.site-header{background:var(--g900);padding:0}
+.header-inner{padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+.header-logo{font-family:'DM Serif Display',serif;font-size:18px;color:#fff}
+.header-sub{font-size:11px;color:var(--g100);margin-top:1px}
+.lang-toggle{display:flex;gap:4px}
+.lang-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:16px;padding:4px 10px;font-size:12px;color:#fff;cursor:pointer;font-family:inherit;transition:background .15s}
+.lang-btn.active{background:var(--g600);border-color:var(--g600)}
+
+/* BLOCK HERO */
+.block-hero{background:linear-gradient(135deg,var(--g900) 0%,var(--g800) 100%);padding:24px 20px 28px}
+.block-id-display{font-size:13px;font-weight:600;color:var(--g100);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+.block-name{font-family:'DM Serif Display',serif;font-size:28px;color:#fff;line-height:1.2;margin-bottom:4px}
+.block-ranch{font-size:14px;color:var(--g100);margin-bottom:16px}
+.block-badges{display:flex;flex-wrap:wrap;gap:8px}
+.badge{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:5px 12px;font-size:12px;color:#fff;font-weight:500}
+.badge-icon{font-size:14px}
+
+/* NAV BUTTON */
+.nav-section{padding:16px 20px;background:var(--surf);border-bottom:1px solid var(--bd)}
+.nav-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:var(--g900);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none;transition:background .15s}
+.nav-btn:hover{background:var(--g800)}
+.nav-btn-icon{font-size:20px}
+
+/* DETAILS GRID */
+.details-section{padding:16px 20px}
+.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);margin-bottom:12px}
+.details-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.detail-card{background:var(--surf);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;box-shadow:var(--sh)}
+.detail-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--tx4);margin-bottom:3px}
+.detail-value{font-size:14px;font-weight:600;color:var(--tx)}
+.detail-card.highlight{background:var(--g50);border-color:var(--g100)}
+.detail-card.highlight .detail-value{color:var(--g800)}
+
+/* COMPLIANCE */
+.compliance-section{padding:0 20px 16px}
+.compliance-card{background:var(--surf);border:1px solid var(--bd);border-radius:10px;padding:14px;box-shadow:var(--sh);margin-bottom:10px}
+.compliance-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.compliance-icon{font-size:18px}
+.compliance-title{font-size:13px;font-weight:600;color:var(--tx)}
+.compliance-value{font-size:20px;font-weight:700;color:var(--tx);margin-bottom:2px}
+.compliance-sub{font-size:12px;color:var(--tx3)}
+.rei-active{color:var(--red)}
+.rei-clear{color:var(--g600)}
+
+/* TASKS */
+.tasks-section{padding:0 20px 16px}
+.task-item{background:var(--surf);border:1px solid var(--bd);border-radius:8px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;box-shadow:var(--sh)}
+.task-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);flex-shrink:0}
+.task-text{font-size:13px;color:var(--tx)}
+.no-tasks{font-size:13px;color:var(--tx4);font-style:italic;padding:8px 0}
+
+/* LOG FORM */
+.log-section{padding:0 20px 24px}
+.log-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--g50);border:1.5px dashed var(--g400);border-radius:10px;padding:14px;font-size:14px;font-weight:600;color:var(--g800);cursor:pointer;font-family:inherit;transition:background .15s}
+.log-btn:hover{background:var(--g100)}
+
+/* LOG MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-bg.open{opacity:1;pointer-events:all}
+.modal{background:var(--surf);border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));transform:translateY(40px);opacity:0;transition:transform .25s cubic-bezier(.32,.72,0,1),opacity .2s}
+.modal-bg.open .modal{transform:translateY(0);opacity:1}
+.modal-handle{width:36px;height:4px;background:var(--bd);border-radius:2px;margin:0 auto 18px}
+.modal h2{font-family:'DM Serif Display',serif;font-size:20px;color:var(--tx);margin-bottom:16px}
+.form-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--tx3);display:block;margin-bottom:5px}
+.form-input{width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;font-size:14px;color:var(--tx);font-family:inherit;outline:none;margin-bottom:12px}
+.form-input:focus{border-color:var(--g400);background:#fff}
+textarea.form-input{height:80px;resize:none}
+.form-actions{display:flex;gap:8px;margin-top:4px}
+.btn-cancel{flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:11px;font-size:14px;font-weight:500;color:var(--tx2);cursor:pointer;font-family:inherit}
+.btn-submit{flex:2;background:var(--g900);border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit}
+
+/* NOT FOUND */
+.not-found{text-align:center;padding:60px 24px}
+.not-found h2{font-family:'DM Serif Display',serif;font-size:24px;color:var(--tx);margin-bottom:8px}
+.not-found p{font-size:14px;color:var(--tx3);margin-bottom:24px}
+.block-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;padding:0 20px 24px}
+.block-list-item{background:var(--surf);border:2px solid var(--bd);border-radius:12px;padding:12px 10px;text-align:center;cursor:pointer;transition:all .15s;box-shadow:var(--sh);position:relative}
+.block-list-item:hover{transform:translateY(-1px);box-shadow:var(--shmd)}
+.block-list-item:active{transform:scale(.97)}
+.bli-status-dot{width:10px;height:10px;border-radius:50%;position:absolute;top:8px;right:8px}
+.bli-id{font-size:13px;font-weight:700;color:var(--g800);margin-bottom:2px}
+.bli-variety{font-size:11px;color:var(--tx2);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bli-ranch{font-size:10px;color:var(--tx3);margin-top:1px}
+.bli-status-text{font-size:10px;font-weight:700;margin-top:5px;padding:2px 6px;border-radius:10px;display:inline-block}
+/* Status colors */
+.status-red{border-color:#EF4444;background:#FEF2F2}
+.status-red .bli-id{color:#991B1B}
+.status-red .bli-status-dot{background:#EF4444}
+.status-red .bli-status-text{background:#FEE2E2;color:#991B1B}
+.status-orange{border-color:#F97316;background:#FFF7ED}
+.status-orange .bli-id{color:#9A3412}
+.status-orange .bli-status-dot{background:#F97316}
+.status-orange .bli-status-text{background:#FFEDD5;color:#9A3412}
+.status-yellow{border-color:#EAB308;background:#FEFCE8}
+.status-yellow .bli-id{color:#854D0E}
+.status-yellow .bli-status-dot{background:#EAB308}
+.status-yellow .bli-status-text{background:#FEF9C3;color:#854D0E}
+.status-green{border-color:var(--g400);background:var(--g50)}
+.status-green .bli-id{color:var(--g800)}
+.status-green .bli-status-dot{background:var(--g400)}
+.status-green .bli-status-text{background:var(--g100);color:var(--g800)}
+
+/* FOOTER */
+.site-footer{background:var(--g900);padding:14px 20px;text-align:center}
+.site-footer p{font-size:11px;color:var(--g100)}
+
+/* TOPWORK BADGE */
+.topwork-badge{background:var(--amber-bg);border:1px solid #FDE68A;border-radius:20px;padding:5px 12px;font-size:12px;color:var(--amber);font-weight:500;display:inline-block;margin-top:8px}
+
+@media(min-width:600px){
+  .details-grid{grid-template-columns:repeat(3,1fr)}
+  .block-hero{padding:32px 28px 36px}
+  .details-section,.compliance-section,.tasks-section,.log-section,.nav-section{padding-left:28px;padding-right:28px}
+}
+
+/* SHARE SECTION */
+.share-section{padding:0 20px 16px}
+.share-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;border:2px solid var(--bd);border-radius:14px;padding:18px 16px;font-size:17px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;margin-bottom:12px;box-shadow:var(--shmd);min-height:60px;background:var(--surf);color:var(--tx2)}
+.share-btn:active{transform:scale(.98)}
+.share-btn-wa{background:#E7F8EE;border-color:#25D366;color:#128C7E}
+.share-btn-icon{font-size:22px;flex-shrink:0}
+
+/* CHECK-IN */
+.checkin-section{padding:0 20px 16px}
+.checkin-card{background:#fff;border:3px solid var(--g600);border-radius:16px;padding:22px 20px;text-align:center;box-shadow:0 4px 20px rgba(27,67,50,.18)}
+.checkin-card.checkin-done{border-color:var(--g400);background:var(--g50)}
+.checkin-icon{font-size:42px;margin-bottom:8px}
+.checkin-title{font-size:20px;font-weight:800;color:var(--g900);margin-bottom:6px}
+.checkin-sub{font-size:14px;color:var(--tx2);margin-bottom:18px;line-height:1.6}
+.checkin-crew-row{display:flex;gap:10px;margin-bottom:16px}
+.checkin-crew-row input{background:var(--bg);border:2px solid var(--bd);border-radius:10px;padding:12px;font-size:18px;font-weight:700;color:var(--tx);font-family:inherit;outline:none;text-align:center}
+.checkin-crew-row input:focus{border-color:var(--g400)}
+.checkin-btn{background:var(--g900);color:#fff;border:none;border-radius:12px;padding:18px 24px;font-size:18px;font-weight:800;cursor:pointer;font-family:inherit;width:100%;transition:background .15s}
+.checkin-btn:active{background:var(--g800);transform:scale(.98)}
+
+/* STATUS COLORS */
+.block-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;padding:0 20px 24px}
+.block-list-item{background:var(--surf);border:2px solid var(--bd);border-radius:12px;padding:12px 10px;text-align:center;cursor:pointer;transition:all .15s;box-shadow:var(--sh);position:relative}
+.block-list-item:hover{transform:translateY(-1px);box-shadow:var(--shmd)}
+.bli-status-dot{width:10px;height:10px;border-radius:50%;position:absolute;top:8px;right:8px}
+.bli-id{font-size:13px;font-weight:700;color:var(--g800);margin-bottom:2px}
+.bli-variety{font-size:11px;color:var(--tx2);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bli-ranch{font-size:10px;color:var(--tx3);margin-top:1px}
+.bli-status-text{font-size:10px;font-weight:700;margin-top:5px;padding:2px 6px;border-radius:10px;display:inline-block}
+.status-red{border-color:#EF4444;background:#FEF2F2}.status-red .bli-id{color:#991B1B}.status-red .bli-status-dot{background:#EF4444}.status-red .bli-status-text{background:#FEE2E2;color:#991B1B}
+.status-orange{border-color:#F97316;background:#FFF7ED}.status-orange .bli-id{color:#9A3412}.status-orange .bli-status-dot{background:#F97316}.status-orange .bli-status-text{background:#FFEDD5;color:#9A3412}
+.status-yellow{border-color:#EAB308;background:#FEFCE8}.status-yellow .bli-id{color:#854D0E}.status-yellow .bli-status-dot{background:#EAB308}.status-yellow .bli-status-text{background:#FEF9C3;color:#854D0E}
+.status-green{border-color:var(--g400);background:var(--g50)}.status-green .bli-id{color:var(--g800)}.status-green .bli-status-dot{background:var(--g400)}.status-green .bli-status-text{background:var(--g100);color:var(--g800)}
+
+/* ASSIGN TASK */
+.assign-tag{display:inline-flex;align-items:center;gap:4px;background:var(--g50);border:1px solid var(--g200);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--g800);margin:3px;cursor:pointer;transition:background .15s}
+.assign-tag:hover{background:var(--g100)}
+
+</style>
+</head>
+<body>
+
+<div class="site-header">
+  <div class="header-inner">
+    <div style="display:flex;align-items:center;gap:10px">
+      <button id="home-btn" onclick="goHome()" style="display:none;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:7px 11px;color:#fff;font-size:16px;cursor:pointer;line-height:1;font-family:inherit" title="All blocks">&#8592;</button>
+      <div>
+        <div class="header-logo">M&amp;R Farm Management</div>
+        <div class="header-sub" id="header-sub">Field Block Information</div>
+      </div>
+    </div>
+    <div class="lang-toggle">
+      <button class="lang-btn active" id="btn-en" onclick="setLang('en')">EN</button>
+      <button class="lang-btn" id="btn-es" onclick="setLang('es')">ES</button>
+    </div>
+  </div>
+</div>
+
+<div id="block-content"></div>
+
+<!-- LOG ACTIVITY MODAL -->
+<div class="modal-bg" id="modal-log">
+<div class="modal">
+  <div class="modal-handle"></div>
+  <h2>Log Activity / Registrar Actividad</h2>
+
+  <label class="form-label">Activity Type / Tipo de Actividad</label>
+  <select class="form-input" id="log-type" onchange="onActivityTypeChange()">
+    <option value="">Select / Seleccionar</option>
+    <option value="Spray">Spray / Fumigacion</option>
+    <option value="Irrigation">Irrigation / Riego</option>
+    <option value="Pruning">Pruning / Poda</option>
+    <option value="Fertilizer">Fertilizer / Fertilizante</option>
+    <option value="Harvest">Harvest / Cosecha</option>
+    <option value="Repair">Repair / Reparacion</option>
+    <option value="Inspection">Inspection / Inspeccion</option>
+    <option value="Other">Other / Otro</option>
+  </select>
+
+  <!-- SPRAY FIELDS -->
+  <div id="spray-fields" style="display:none">
+    <label class="form-label">Chemical / Quimico</label>
+    <select class="form-input" id="log-chemical" onchange="onChemicalChange()">
+      <option value="">Select chemical / Seleccionar quimico</option>
+    </select>
+    <div id="custom-chemical-wrap" style="display:none">
+      <label class="form-label">Custom Chemical / Nombre del Quimico</label>
+      <input class="form-input" id="log-custom-chemical" placeholder="Enter chemical name">
+    </div>
+    <label class="form-label">REI Hours / Horas REI</label>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+      <input class="form-input" id="log-rei-days" type="number" min="0" max="72" placeholder="e.g. 24" style="margin-bottom:0;flex:1">
+      <span style="font-size:12px;color:var(--tx3);white-space:nowrap">hours / horas</span>
+    </div>
+    <label class="form-label">Spray Date / Fecha de Fumigacion</label>
+    <input class="form-input" id="log-spray-date" type="date">
+    <label class="form-label">Application Rate / Tasa de Aplicacion</label>
+    <input class="form-input" id="log-rate" placeholder="e.g. 2 gal/acre">
+    <div style="background:var(--red-bg);border:1px solid var(--red-bd);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--red)">
+      &#9888; Block will be marked REI RESTRICTED after saving<br>
+      <span>El bloque se marcara como RESTRINGIDO por REI</span>
+    </div>
+  </div>
+
+  <!-- IRRIGATION FIELDS -->
+  <div id="irrig-fields" style="display:none">
+    <label class="form-label">Irrigation Type / Tipo de Riego</label>
+    <select class="form-input" id="log-irrig-type">
+      <option value="">Select / Seleccionar</option>
+      <option value="Flood / Inundacion">Flood / Inundacion</option>
+      <option value="Drip / Goteo">Drip / Goteo</option>
+      <option value="Micro-sprinkler / Micro-aspersor">Micro-sprinkler / Micro-aspersor</option>
+      <option value="Sprinkler / Aspersor">Sprinkler / Aspersor</option>
+      <option value="Furrow / Surco">Furrow / Surco</option>
+    </select>
+    <label class="form-label">Irrigation Date / Fecha de Riego</label>
+    <input class="form-input" id="log-irrig-date" type="date">
+    <label class="form-label">Est. Days to Dry / Dias Est. para Secar</label>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+      <input class="form-input" id="log-dry-days" type="number" min="1" max="14" placeholder="e.g. 3" style="margin-bottom:0;flex:1">
+      <span style="font-size:12px;color:var(--tx3);white-space:nowrap">days / dias</span>
+    </div>
+    <div style="background:var(--amber-bg);border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--amber)">
+      &#9888; Field will be marked WET — no heavy equipment or spray rigs<br>
+      <span style="color:#B45309">Campo se marcara como MOJADO — sin equipo pesado ni fumigadoras</span>
+    </div>
+  </div>
+
+  <label class="form-label">Logged by / Registrado por</label>
+  <input class="form-input" id="log-worker" placeholder="Name / Nombre">
+
+  <label class="form-label">Notes / Notas</label>
+  <textarea class="form-input" id="log-notes" placeholder="Details / Detalles..."></textarea>
+
+  <div class="form-actions">
+    <button class="btn-cancel" onclick="closeModal()">Cancel / Cancelar</button>
+    <button class="btn-submit" onclick="submitLog()">Save / Guardar</button>
+  </div>
+</div>
+</div>
+<!-- ASSIGN TASK MODAL -->
+<div class="modal-bg" id="modal-assign">
+<div class="modal">
+  <div class="modal-handle"></div>
+  <h2>Assign Task / Asignar Tarea</h2>
+  <label class="form-label">Task Description / Descripcion de la Tarea</label>
+  <textarea class="form-input" id="assign-task-input" style="height:90px" placeholder="e.g. Irrigate rows 1-20 / Regar filas 1-20"></textarea>
+  <div style="margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--tx3);margin-bottom:8px">Quick tasks / Tareas rapidas</div>
+    <span class="assign-tag" onclick="quickTask('Irrigate full block / Regar bloque completo')">Irrigate / Regar</span>
+    <span class="assign-tag" onclick="quickTask('Apply spray treatment / Aplicar tratamiento de fumigacion')">Spray / Fumigar</span>
+    <span class="assign-tag" onclick="quickTask('Prune trees / Podar arboles')">Prune / Podar</span>
+    <span class="assign-tag" onclick="quickTask('Apply fertilizer / Aplicar fertilizante')">Fertilize / Fertilizar</span>
+    <span class="assign-tag" onclick="quickTask('General inspection / Inspeccion general')">Inspect / Inspeccionar</span>
+    <span class="assign-tag" onclick="quickTask('Pick up harvest bins / Recoger cajas de cosecha')">Harvest / Cosechar</span>
+    <span class="assign-tag" onclick="quickTask('Equipment repair needed / Reparacion de equipo necesaria')">Repair / Reparar</span>
+  </div>
+  <div class="form-actions">
+    <button class="btn-cancel" onclick="closeAssignModal()">Cancel / Cancelar</button>
+    <button class="btn-submit" onclick="submitAssignTask()">Assign / Asignar</button>
+  </div>
+</div>
+</div>
+
+<div class="site-footer">
+  <p>M&amp;R Farm Management, Inc. &nbsp;|&nbsp; Powered by AgCommand &nbsp;|&nbsp; Martinez Accounting Inc.</p>
+</div>
+
+<script>
+const BLOCKS = {
+  "0101": {
+    displayId: "MR-01-01",
+    ranch: "108 Ranch",
+    ranchEs: "Rancho 108",
+    origBlock: "19",
+    variety: "Autumn Gold Navel",
+    varietyEs: "Navel Autumn Gold",
+    rootstock: "Carrizo",
+    spacing: "20x16",
+    plantYear: "2024",
+    topwork: "",
+    acreage: "12.28",
+    county: "Tulare",
+    siteId: "06-101",
+    lat: 36.5017,
+    lng: -119.3195,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0102": {
+    displayId: "MR-01-02",
+    ranch: "108 Ranch",
+    ranchEs: "Rancho 108",
+    origBlock: "19A",
+    variety: "Powell Navel",
+    varietyEs: "Navel Powell",
+    rootstock: "Carrizo",
+    spacing: "20x16",
+    plantYear: "2024",
+    topwork: "",
+    acreage: "17.72",
+    county: "Tulare",
+    siteId: "06-102",
+    lat: 36.5018,
+    lng: -119.3194,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0201": {
+    displayId: "MR-02-01",
+    ranch: "120 Ranch",
+    ranchEs: "Rancho 120",
+    origBlock: "18",
+    variety: "Atwood Navel",
+    varietyEs: "Navel Atwood",
+    rootstock: "Carrizo",
+    spacing: "20x16",
+    plantYear: "2000",
+    topwork: "",
+    acreage: "10.00",
+    county: "Tulare",
+    siteId: "03-101",
+    lat: 36.5038,
+    lng: -119.3008,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0202": {
+    displayId: "MR-02-02",
+    ranch: "120 Ranch",
+    ranchEs: "Rancho 120",
+    origBlock: "18A",
+    variety: "Olinda Valencia",
+    varietyEs: "Valencia Olinda",
+    rootstock: "Carrizo",
+    spacing: "20x14",
+    plantYear: "2017",
+    topwork: "2023",
+    acreage: "8.00",
+    county: "Tulare",
+    siteId: "03-104/105",
+    lat: 36.5066,
+    lng: -119.3008,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0203": {
+    displayId: "MR-02-03",
+    ranch: "120 Ranch",
+    ranchEs: "Rancho 120",
+    origBlock: "18B",
+    variety: "Palestine Sweet Lime",
+    varietyEs: "Lima Dulce Palestina",
+    rootstock: "Carrizo",
+    spacing: "20x16",
+    plantYear: "2000",
+    topwork: "2022",
+    acreage: "7.50",
+    county: "Tulare",
+    siteId: "N/A",
+    lat: 36.5040,
+    lng: -119.3008,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0204": {
+    displayId: "MR-02-04",
+    ranch: "120 Ranch",
+    ranchEs: "Rancho 120",
+    origBlock: "18C",
+    variety: "Pomegranate",
+    varietyEs: "Granada",
+    rootstock: "N/A",
+    spacing: "20x14",
+    plantYear: "2024",
+    topwork: "",
+    acreage: "4.00",
+    county: "Tulare",
+    siteId: "N/A",
+    lat: 36.5030,
+    lng: -119.3015,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0301": {
+    displayId: "MR-03-01",
+    ranch: "392 Ranch",
+    ranchEs: "Rancho 392",
+    origBlock: "27",
+    variety: "Powell Navel",
+    varietyEs: "Navel Powell",
+    rootstock: "Carrizo",
+    spacing: "20x8",
+    plantYear: "2024",
+    topwork: "",
+    acreage: "8.25",
+    county: "Tulare",
+    siteId: "05-104",
+    lat: 36.3006,
+    lng: -119.1875,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0302": {
+    displayId: "MR-03-02",
+    ranch: "392 Ranch",
+    ranchEs: "Rancho 392",
+    origBlock: "28",
+    variety: "Powell Navel",
+    varietyEs: "Navel Powell",
+    rootstock: "Carrizo",
+    spacing: "20x16",
+    plantYear: "2000",
+    topwork: "",
+    acreage: "8.25",
+    county: "Tulare",
+    siteId: "05-104",
+    lat: 36.3016,
+    lng: -119.1875,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0303": {
+    displayId: "MR-03-03",
+    ranch: "392 Ranch",
+    ranchEs: "Rancho 392",
+    origBlock: "29",
+    variety: "Tango Mandarin",
+    varietyEs: "Mandarina Tango",
+    rootstock: "Carrizo",
+    spacing: "18x8",
+    plantYear: "2019",
+    topwork: "2023",
+    acreage: "11.50",
+    county: "Tulare",
+    siteId: "05-110",
+    lat: 36.3019,
+    lng: -119.1818,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0304": {
+    displayId: "MR-03-04",
+    ranch: "392 Ranch",
+    ranchEs: "Rancho 392",
+    origBlock: "30",
+    variety: "Tango Mandarin",
+    varietyEs: "Mandarina Tango",
+    rootstock: "Carrizo",
+    spacing: "18x10",
+    plantYear: "2019",
+    topwork: "",
+    acreage: "23.95",
+    county: "Tulare",
+    siteId: "05-106",
+    lat: 36.3019,
+    lng: -119.1832,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0305": {
+    displayId: "MR-03-05",
+    ranch: "392 Ranch",
+    ranchEs: "Rancho 392",
+    origBlock: "30A",
+    variety: "Tango Mandarin",
+    varietyEs: "Mandarina Tango",
+    rootstock: "Carrizo",
+    spacing: "20x7",
+    plantYear: "2024",
+    topwork: "",
+    acreage: "18.00",
+    county: "Tulare",
+    siteId: "N/A",
+    lat: 36.5047,
+    lng: -119.3051,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0306": {
+    displayId: "MR-03-06",
+    ranch: "392 Ranch",
+    ranchEs: "Rancho 392",
+    origBlock: "31",
+    variety: "Gillette Navel",
+    varietyEs: "Navel Gillette",
+    rootstock: "Carrizo",
+    spacing: "18x8",
+    plantYear: "2020",
+    topwork: "2023",
+    acreage: "18.00",
+    county: "Tulare",
+    siteId: "05-101",
+    lat: 36.5048,
+    lng: -119.3077,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0307": {
+    displayId: "MR-03-07",
+    ranch: "392 Ranch",
+    ranchEs: "Rancho 392",
+    origBlock: "B3",
+    variety: "Ivory Table Grapes",
+    varietyEs: "Uvas de Mesa Marfil",
+    rootstock: "N/A",
+    spacing: "N/A",
+    plantYear: "N/A",
+    topwork: "",
+    acreage: "7.50",
+    county: "Tulare",
+    siteId: "05-103",
+    lat: 36.5016,
+    lng: -119.3110,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0308": {
+    displayId: "MR-03-08",
+    ranch: "392 Ranch",
+    ranchEs: "Rancho 392",
+    origBlock: "B4",
+    variety: "Concord Table Grapes",
+    varietyEs: "Uvas de Mesa Concord",
+    rootstock: "N/A",
+    spacing: "N/A",
+    plantYear: "N/A",
+    topwork: "",
+    acreage: "3.00",
+    county: "Tulare",
+    siteId: "05-105",
+    lat: 36.5031,
+    lng: -119.3112,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0401": {
+    displayId: "MR-04-01",
+    ranch: "Dinuba Ranch",
+    ranchEs: "Rancho Dinuba",
+    origBlock: "32",
+    variety: "Washington Navel",
+    varietyEs: "Navel Washington",
+    rootstock: "Carrizo",
+    spacing: "20x16",
+    plantYear: "1985",
+    topwork: "",
+    acreage: "9.25",
+    county: "Fresno",
+    siteId: "5B-15",
+    lat: 36.3588,
+    lng: -119.3297,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0402": {
+    displayId: "MR-04-02",
+    ranch: "Dinuba Ranch",
+    ranchEs: "Rancho Dinuba",
+    origBlock: "33",
+    variety: "Cutter Valencia",
+    varietyEs: "Valencia Cutter",
+    rootstock: "Trifoliate",
+    spacing: "20x16",
+    plantYear: "1985",
+    topwork: "",
+    acreage: "9.25",
+    county: "Fresno",
+    siteId: "5B-14",
+    lat: 36.5883,
+    lng: -119.3277,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0501": {
+    displayId: "MR-05-01",
+    ranch: "Floral Ranch",
+    ranchEs: "Rancho Floral",
+    origBlock: "34",
+    variety: "Old Bud Line Navel",
+    varietyEs: "Navel Linea Vieja",
+    rootstock: "Carrizo",
+    spacing: "20x12",
+    plantYear: "1990",
+    topwork: "",
+    acreage: "7.28",
+    county: "Tulare",
+    siteId: "11-101",
+    lat: 36.3406,
+    lng: -119.3246,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0502": {
+    displayId: "MR-05-02",
+    ranch: "Floral Ranch",
+    ranchEs: "Rancho Floral",
+    origBlock: "35",
+    variety: "Washington Navel",
+    varietyEs: "Navel Washington",
+    rootstock: "Trifoliate",
+    spacing: "20x20",
+    plantYear: "1970",
+    topwork: "",
+    acreage: "6.50",
+    county: "Tulare",
+    siteId: "11-102",
+    lat: 36.3419,
+    lng: -119.3246,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0503": {
+    displayId: "MR-05-03",
+    ranch: "Floral Ranch",
+    ranchEs: "Rancho Floral",
+    origBlock: "36",
+    variety: "Gillette Navel",
+    varietyEs: "Navel Gillette",
+    rootstock: "Carrizo",
+    spacing: "20x16",
+    plantYear: "1990",
+    topwork: "",
+    acreage: "13.39",
+    county: "Tulare",
+    siteId: "11-103",
+    lat: 36.3413,
+    lng: -119.3249,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0601": {
+    displayId: "MR-06-01",
+    ranch: "Floral 2 Ranch",
+    ranchEs: "Rancho Floral 2",
+    origBlock: "44",
+    variety: "Fisher Navel",
+    varietyEs: "Navel Fisher",
+    rootstock: "Carrizo",
+    spacing: "20x18",
+    plantYear: "1980",
+    topwork: "",
+    acreage: "19.35",
+    county: "Tulare",
+    siteId: "11-105",
+    lat: 36.5647,
+    lng: -119.3237,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0602": {
+    displayId: "MR-06-02",
+    ranch: "Floral 2 Ranch",
+    ranchEs: "Rancho Floral 2",
+    origBlock: "45",
+    variety: "Olinda Valencia",
+    varietyEs: "Valencia Olinda",
+    rootstock: "Carrizo",
+    spacing: "20x18",
+    plantYear: "1980",
+    topwork: "",
+    acreage: "18.54",
+    county: "Tulare",
+    siteId: "11-104",
+    lat: 36.5663,
+    lng: -119.3234,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0701": {
+    displayId: "MR-07-01",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "1A",
+    variety: "W. Murcott Mandarin",
+    varietyEs: "Mandarina W. Murcott",
+    rootstock: "Carrizo",
+    spacing: "20x16",
+    plantYear: "2000",
+    topwork: "",
+    acreage: "13.70",
+    county: "Fresno",
+    siteId: "5B-1A",
+    lat: 36.5851,
+    lng: -119.3053,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0702": {
+    displayId: "MR-07-02",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "1B",
+    variety: "Tango Mandarin",
+    varietyEs: "Mandarina Tango",
+    rootstock: "Carrizo",
+    spacing: "20x8",
+    plantYear: "2018",
+    topwork: "",
+    acreage: "3.20",
+    county: "Fresno",
+    siteId: "5B-1B",
+    lat: 36.5847,
+    lng: -119.3070,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0703": {
+    displayId: "MR-07-03",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "2",
+    variety: "Washington Navel",
+    varietyEs: "Navel Washington",
+    rootstock: "Trifoliate/Troyer",
+    spacing: "20x16",
+    plantYear: "1990",
+    topwork: "",
+    acreage: "18.90",
+    county: "Fresno",
+    siteId: "5B-2",
+    lat: 36.5851,
+    lng: -119.3046,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0704": {
+    displayId: "MR-07-04",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "3",
+    variety: "Olinda Valencia",
+    varietyEs: "Valencia Olinda",
+    rootstock: "Carrizo",
+    spacing: "22x16",
+    plantYear: "1990",
+    topwork: "",
+    acreage: "12.25",
+    county: "Fresno",
+    siteId: "5B-3",
+    lat: 36.5852,
+    lng: -119.3059,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0705": {
+    displayId: "MR-07-05",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "4",
+    variety: "Powell Navel",
+    varietyEs: "Navel Powell",
+    rootstock: "Carrizo",
+    spacing: "22x8",
+    plantYear: "1990",
+    topwork: "",
+    acreage: "12.25",
+    county: "Fresno",
+    siteId: "5B-4",
+    lat: 36.5853,
+    lng: -119.3069,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0706": {
+    displayId: "MR-07-06",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "5",
+    variety: "Tango Mandarin",
+    varietyEs: "Mandarina Tango",
+    rootstock: "Carrizo",
+    spacing: "18x10",
+    plantYear: "2014",
+    topwork: "",
+    acreage: "12.50",
+    county: "Fresno",
+    siteId: "5B-5",
+    lat: 36.5851,
+    lng: -119.3069,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0707": {
+    displayId: "MR-07-07",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "6",
+    variety: "Fukumoto Navel",
+    varietyEs: "Navel Fukumoto",
+    rootstock: "Carrizo",
+    spacing: "18x11",
+    plantYear: "2014",
+    topwork: "",
+    acreage: "12.50",
+    county: "Fresno",
+    siteId: "5B-6",
+    lat: 36.5851,
+    lng: -119.3070,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0708": {
+    displayId: "MR-07-08",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "7",
+    variety: "Powell Navel",
+    varietyEs: "Navel Powell",
+    rootstock: "Carrizo",
+    spacing: "20x16",
+    plantYear: "2004",
+    topwork: "",
+    acreage: "5.60",
+    county: "Fresno",
+    siteId: "5B-7",
+    lat: 36.5833,
+    lng: -119.3070,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0709": {
+    displayId: "MR-07-09",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "8",
+    variety: "Tango Mandarin",
+    varietyEs: "Mandarina Tango",
+    rootstock: "Carrizo",
+    spacing: "20x8",
+    plantYear: "2014",
+    topwork: "",
+    acreage: "3.25",
+    county: "Fresno",
+    siteId: "5B-8",
+    lat: 36.5829,
+    lng: -119.3070,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0710": {
+    displayId: "MR-07-10",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "9A",
+    variety: "Tango Mandarin",
+    varietyEs: "Mandarina Tango",
+    rootstock: "Carrizo",
+    spacing: "18x8",
+    plantYear: "2018",
+    topwork: "2024",
+    acreage: "4.41",
+    county: "Fresno",
+    siteId: "5B-9A",
+    lat: 36.5828,
+    lng: -119.3083,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0711": {
+    displayId: "MR-07-11",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "9B",
+    variety: "Tango Mandarin",
+    varietyEs: "Mandarina Tango",
+    rootstock: "Carrizo",
+    spacing: "18x7",
+    plantYear: "2024",
+    topwork: "",
+    acreage: "8.71",
+    county: "Fresno",
+    siteId: "5B-9B",
+    lat: 36.5832,
+    lng: -119.3083,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0712": {
+    displayId: "MR-07-12",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "10",
+    variety: "Tango Mandarin",
+    varietyEs: "Mandarina Tango",
+    rootstock: "Carrizo",
+    spacing: "18x8",
+    plantYear: "2016",
+    topwork: "",
+    acreage: "14.25",
+    county: "Fresno",
+    siteId: "5B-10",
+    lat: 36.5810,
+    lng: -119.3061,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0713": {
+    displayId: "MR-07-13",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "11",
+    variety: "Tango Mandarin",
+    varietyEs: "Mandarina Tango",
+    rootstock: "Carrizo",
+    spacing: "18x8",
+    plantYear: "2016",
+    topwork: "2024",
+    acreage: "10.00",
+    county: "Fresno",
+    siteId: "5B-11",
+    lat: 36.5825,
+    lng: -119.3063,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0714": {
+    displayId: "MR-07-14",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "12",
+    variety: "Olinda Valencia",
+    varietyEs: "Valencia Olinda",
+    rootstock: "Carrizo",
+    spacing: "22x16",
+    plantYear: "1980",
+    topwork: "",
+    acreage: "3.91",
+    county: "Fresno",
+    siteId: "5B-12",
+    lat: 36.5833,
+    lng: -119.3062,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0715": {
+    displayId: "MR-07-15",
+    ranch: "Home Ranch",
+    ranchEs: "Rancho Principal",
+    origBlock: "13",
+    variety: "Palestine Sweet Lime",
+    varietyEs: "Lima Dulce Palestina",
+    rootstock: "Carrizo",
+    spacing: "20x16",
+    plantYear: "2005",
+    topwork: "",
+    acreage: "1.54",
+    county: "Fresno",
+    siteId: "5B-13",
+    lat: 36.5833,
+    lng: -119.3062,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0801": {
+    displayId: "MR-08-01",
+    ranch: "Huntsman Ranch",
+    ranchEs: "Rancho Huntsman",
+    origBlock: "22",
+    variety: "Fisher Navel",
+    varietyEs: "Navel Fisher",
+    rootstock: "Carrizo",
+    spacing: "20x14",
+    plantYear: "1985",
+    topwork: "",
+    acreage: "4.36",
+    county: "Tulare",
+    siteId: "07-101",
+    lat: 36.5832,
+    lng: -119.1818,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0802": {
+    displayId: "MR-08-02",
+    ranch: "Huntsman Ranch",
+    ranchEs: "Rancho Huntsman",
+    origBlock: "23",
+    variety: "Atwood Navel",
+    varietyEs: "Navel Atwood",
+    rootstock: "Carrizo",
+    spacing: "20x12",
+    plantYear: "1990",
+    topwork: "",
+    acreage: "4.51",
+    county: "Tulare",
+    siteId: "07-101",
+    lat: 36.5832,
+    lng: -119.1809,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0803": {
+    displayId: "MR-08-03",
+    ranch: "Huntsman Ranch",
+    ranchEs: "Rancho Huntsman",
+    origBlock: "24",
+    variety: "Cara Cara",
+    varietyEs: "Cara Cara",
+    rootstock: "Carrizo",
+    spacing: "20x14",
+    plantYear: "2002",
+    topwork: "",
+    acreage: "3.66",
+    county: "Tulare",
+    siteId: "07-101",
+    lat: 36.5825,
+    lng: -119.1817,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0804": {
+    displayId: "MR-08-04",
+    ranch: "Huntsman Ranch",
+    ranchEs: "Rancho Huntsman",
+    origBlock: "25",
+    variety: "Autumn Gold",
+    varietyEs: "Autumn Gold",
+    rootstock: "Carrizo",
+    spacing: "20x14",
+    plantYear: "2005",
+    topwork: "",
+    acreage: "4.58",
+    county: "Tulare",
+    siteId: "07-101",
+    lat: 36.5826,
+    lng: -119.1813,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0805": {
+    displayId: "MR-08-05",
+    ranch: "Huntsman Ranch",
+    ranchEs: "Rancho Huntsman",
+    origBlock: "26",
+    variety: "Olinda Valencia",
+    varietyEs: "Valencia Olinda",
+    rootstock: "Carrizo",
+    spacing: "20x16",
+    plantYear: "1986",
+    topwork: "",
+    acreage: "9.40",
+    county: "Tulare",
+    siteId: "07-101",
+    lat: 36.5826,
+    lng: -119.1809,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "0901": {
+    displayId: "MR-09-01",
+    ranch: "Impossible Ranch",
+    ranchEs: "Rancho Impossible",
+    origBlock: "40",
+    variety: "Washington Navel",
+    varietyEs: "Navel Washington",
+    rootstock: "Trifoliate",
+    spacing: "20x20",
+    plantYear: "1980",
+    topwork: "",
+    acreage: "38.00",
+    county: "Tulare",
+    siteId: "09-101",
+    lat: 36.3481,
+    lng: -119.0758,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "1001": {
+    displayId: "MR-10-01",
+    ranch: "Mansion Ranch",
+    ranchEs: "Rancho Mansion",
+    origBlock: "46",
+    variety: "Cara Cara Navel",
+    varietyEs: "Navel Cara Cara",
+    rootstock: "Trifoliate",
+    spacing: "20x14",
+    plantYear: "2014/2018",
+    topwork: "",
+    acreage: "14.50",
+    county: "Tulare",
+    siteId: "12-101/103",
+    lat: 36.4535,
+    lng: -119.1261,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "1002": {
+    displayId: "MR-10-02",
+    ranch: "Mansion Ranch",
+    ranchEs: "Rancho Mansion",
+    origBlock: "47",
+    variety: "Manzanilla Olive",
+    varietyEs: "Olivo Manzanilla",
+    rootstock: "N/A",
+    spacing: "20x18",
+    plantYear: "2012",
+    topwork: "",
+    acreage: "20.00",
+    county: "Tulare",
+    siteId: "12-102",
+    lat: 36.4535,
+    lng: -119.1270,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "1101": {
+    displayId: "MR-11-01",
+    ranch: "Sand Creek Ranch",
+    ranchEs: "Rancho Sand Creek",
+    origBlock: "37",
+    variety: "Old Bud Navel",
+    varietyEs: "Navel Linea Vieja",
+    rootstock: "Carrizo",
+    spacing: "18x18",
+    plantYear: "2002",
+    topwork: "",
+    acreage: "8.20",
+    county: "Tulare",
+    siteId: "10-101",
+    lat: 36.3666,
+    lng: -119.2728,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "1102": {
+    displayId: "MR-11-02",
+    ranch: "Sand Creek Ranch",
+    ranchEs: "Rancho Sand Creek",
+    origBlock: "38",
+    variety: "Autumn Gold Navel",
+    varietyEs: "Navel Autumn Gold",
+    rootstock: "Trifoliate",
+    spacing: "18x18",
+    plantYear: "2005",
+    topwork: "",
+    acreage: "5.95",
+    county: "Tulare",
+    siteId: "10-102",
+    lat: 36.3654,
+    lng: -119.2728,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "1103": {
+    displayId: "MR-11-03",
+    ranch: "Sand Creek Ranch",
+    ranchEs: "Rancho Sand Creek",
+    origBlock: "39",
+    variety: "Atwood Navel",
+    varietyEs: "Navel Atwood",
+    rootstock: "Carrizo",
+    spacing: "18x18",
+    plantYear: "2005",
+    topwork: "",
+    acreage: "5.00",
+    county: "Tulare",
+    siteId: "10-103",
+    lat: 36.3642,
+    lng: -119.2724,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "1104": {
+    displayId: "MR-11-04",
+    ranch: "Sand Creek Ranch",
+    ranchEs: "Rancho Sand Creek",
+    origBlock: "39A",
+    variety: "Powell Navel",
+    varietyEs: "Navel Powell",
+    rootstock: "C-35",
+    spacing: "18x18",
+    plantYear: "2005",
+    topwork: "",
+    acreage: "4.95",
+    county: "Tulare",
+    siteId: "11-103",
+    lat: 36.3650,
+    lng: -119.2724,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+  "1201": {
+    displayId: "MR-12-01",
+    ranch: "Sultana Ranch",
+    ranchEs: "Rancho Sultana",
+    origBlock: "20",
+    variety: "Atwood Navel",
+    varietyEs: "Navel Atwood",
+    rootstock: "Carrizo",
+    spacing: "20x16",
+    plantYear: "2000",
+    topwork: "",
+    acreage: "18.00",
+    county: "Tulare",
+    siteId: "01-101",
+    lat: 36.3216,
+    lng: -119.1985,
+    lastSpray: "",
+    rei: "",
+    assignedTasks: [],
+    notes: ""
+  },
+};
+
+
+// ── STATE ─────────────────────────────────────────────────────────────────
+let lang = 'en';
+let currentBlockId = null;
+
+// Common citrus chemicals with REI days
+const CHEMICALS = [
+  {name:"Abamectin (Agri-Mek)", rei:12},
+  {name:"Azoxystrobin (Quadris)", rei:4},
+  {name:"Bacillus thuringiensis (Dipel)", rei:4},
+  {name:"Bifenazate (Acramite)", rei:12},
+  {name:"Captan", rei:24},
+  {name:"Chlorpyrifos (Lorsban)", rei:24},
+  {name:"Copper Hydroxide (Kocide)", rei:24},
+  {name:"Copper Sulfate", rei:24},
+  {name:"Diazinon", rei:24},
+  {name:"Dimethoate", rei:48},
+  {name:"Emamectin Benzoate (Proclaim)", rei:12},
+  {name:"Fenpropathrin (Danitol)", rei:24},
+  {name:"Hexythiazox (Savey)", rei:12},
+  {name:"Horticultural Oil", rei:4},
+  {name:"Imidacloprid (Admire Pro)", rei:12},
+  {name:"Kaolin Clay (Surround)", rei:4},
+  {name:"Malathion", rei:12},
+  {name:"Mancozeb (Dithane)", rei:24},
+  {name:"Methomyl (Lannate)", rei:48},
+  {name:"Mineral Oil", rei:4},
+  {name:"Neem Oil", rei:4},
+  {name:"Oxythiapiprolin (Orondis)", rei:4},
+  {name:"Petroleum Oil", rei:4},
+  {name:"Phosmet (Imidan)", rei:24},
+  {name:"Potassium Bicarbonate (Kaligreen)", rei:4},
+  {name:"Propiconazole (Banner Maxx)", rei:24},
+  {name:"Pymetrozine (Fulfill)", rei:12},
+  {name:"Pyrethrin (PyGanic)", rei:12},
+  {name:"Spinetoram (Delegate)", rei:4},
+  {name:"Spirotetramat (Movento)", rei:24},
+  {name:"Sulfur", rei:24},
+  {name:"Thiamethoxam (Actara)", rei:12},
+  {name:"Other / Custom", rei:0},
+];
+
+function getIrrigationStatus(block) {
+  if (!block.lastIrrigationDate || !block.dryDays) return null;
+  const irrigDate = new Date(block.lastIrrigationDate);
+  const dryDate = new Date(irrigDate);
+  dryDate.setDate(dryDate.getDate() + parseInt(block.dryDays));
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  if (dryDate > now) {
+    const daysLeft = Math.ceil((dryDate - now) / 86400000);
+    return {
+      wet: true,
+      dryDate: dryDate.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
+      daysLeft: daysLeft,
+      irrigType: block.lastIrrigationType || 'Unknown'
+    };
+  }
+  return {wet: false};
+}
+
+function getReiStatus(block) {
+  if (!block.lastSprayDate || !block.reiDays) return null;
+  const sprayDate = new Date(block.lastSprayDate);
+  const reiExpiry = new Date(sprayDate);
+  reiExpiry.setDate(reiExpiry.getDate() + parseInt(block.reiDays));
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  if (reiExpiry > now) {
+    const daysLeft = Math.ceil((reiExpiry - now) / 86400000);
+    return {
+      active: true,
+      expiry: reiExpiry.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
+      daysLeft: daysLeft,
+      chemical: block.lastChemical || 'Unknown'
+    };
+  }
+  return {active: false};
+}
+
+const T = {
+  en: {
+    header_sub: 'Field Block Information',
+    block_info: 'Block Information',
+    field_details: 'Field Details',
+    variety: 'Variety',
+    rootstock: 'Rootstock',
+    spacing: 'Spacing',
+    planted: 'Planted',
+    topworked: 'Topworked',
+    acreage: 'Acreage',
+    county: 'County',
+    site_id: 'Site ID',
+    orig_block: 'Original Block',
+    compliance: 'Compliance',
+    last_spray: 'Last Spray',
+    rei: 'REI Status',
+    rei_none: 'No recent spray on record',
+    tasks: 'Assigned Tasks',
+    no_tasks: 'No tasks assigned to this block',
+    log_activity: '+ Log Activity',
+    navigate: 'Navigate to This Block',
+    not_found_title: 'Block Not Found',
+    not_found_sub: 'Scan the QR code on the block sign, or select a block below.',
+    all_blocks: 'All Blocks',
+    acres: 'acres',
+    modal_title: 'Log Activity',
+    coords: 'Coordinates',
+    topwork_label: 'Topworked',
+    field_condition: 'Field Condition',
+    irrig_type: 'Irrigation Type',
+    dry_days: 'Est. Days to Dry',
+    irrig_date: 'Irrigation Date',
+    assign_task: 'Assign Task to Block',
+    share_work_order: 'Share Work Order',
+    copy_link: 'Copy Worker Link',
+    share_whatsapp: 'Send via WhatsApp',
+    checkin_title: 'QR Check-In Detected',
+    checkin_sub: 'Enter your crew size and tap to confirm arrival',
+    checkin_btn: 'Confirm Arrival / Confirmar Llegada',
+    checkin_done: 'Checked In Today',
+    crew_size: 'Number of Workers',
+    foreman: 'Foreman / Encargado',
+    foreman_placeholder: 'Name (optional)',
+  },
+  es: {
+    header_sub: 'Informacion del Bloque de Campo',
+    block_info: 'Informacion del Bloque',
+    field_details: 'Detalles del Campo',
+    variety: 'Variedad',
+    rootstock: 'Portainjerto',
+    spacing: 'Espaciado',
+    planted: 'Plantado',
+    topworked: 'Sobreinjertado',
+    acreage: 'Hectareas',
+    county: 'Condado',
+    site_id: 'ID del Sitio',
+    orig_block: 'Bloque Original',
+    compliance: 'Cumplimiento',
+    last_spray: 'Ultima Fumigacion',
+    rei: 'Estado REI',
+    rei_none: 'Sin registro de fumigacion reciente',
+    tasks: 'Tareas Asignadas',
+    no_tasks: 'Sin tareas asignadas a este bloque',
+    log_activity: '+ Registrar Actividad',
+    navigate: 'Navegar a Este Bloque',
+    not_found_title: 'Bloque No Encontrado',
+    not_found_sub: 'Escanea el codigo QR en el letrero del bloque, o selecciona un bloque abajo.',
+    all_blocks: 'Todos los Bloques',
+    acres: 'acres',
+    modal_title: 'Registrar Actividad',
+    coords: 'Coordenadas',
+    topwork_label: 'Sobreinjertado',
+    field_condition: 'Condicion del Campo',
+    irrig_type: 'Tipo de Riego',
+    dry_days: 'Dias Est. para Secar',
+    irrig_date: 'Fecha de Riego',
+    assign_task: 'Asignar Tarea al Bloque',
+    share_work_order: 'Compartir Orden de Trabajo',
+    copy_link: 'Copiar Enlace para Trabajador',
+    share_whatsapp: 'Enviar por WhatsApp',
+    checkin_title: 'Escaneo QR Detectado',
+    checkin_sub: 'Ingresa el numero de trabajadores y toca para confirmar llegada',
+    checkin_btn: 'Confirmar Llegada / Confirm Arrival',
+    checkin_done: 'Registro de Entrada Hoy',
+    crew_size: 'Numero de Trabajadores',
+    foreman: 'Encargado / Foreman',
+    foreman_placeholder: 'Nombre (opcional)',
+  }
+};
+
+function t(key) { return T[lang][key] || key; }
+
+function setLang(l) {
+  lang = l;
+  document.getElementById('btn-en').classList.toggle('active', l==='en');
+  document.getElementById('btn-es').classList.toggle('active', l==='es');
+  document.getElementById('header-sub').textContent = t('header_sub');
+  render();
+}
+
+// ── ROUTING ──────────────────────────────────────────────────────────────
+function getBlockId() {
+  const hash = window.location.hash.replace('#','').trim();
+  const params = new URLSearchParams(window.location.search);
+  return hash || params.get('block') || '';
+}
+
+function render() {
+  const id = getBlockId();
+  const block = BLOCKS[id];
+  const homeBtn = document.getElementById('home-btn');
+  if (!block) {
+    if (homeBtn) homeBtn.style.display = 'none';
+    renderNotFound();
+    return;
+  }
+  if (homeBtn) homeBtn.style.display = 'block';
+  currentBlockId = id;
+  renderBlock(block, id);
+}
+
+// ── BLOCK PAGE ────────────────────────────────────────────────────────────
+function renderBlock(b, id) {
+  const navUrl = `https://www.google.com/maps/search/?api=1&query=${b.lat},${b.lng}`;
+  const variety = lang==='es' ? b.varietyEs : b.variety;
+  const ranch = lang==='es' ? b.ranchEs : b.ranch;
+  const topworkBadge = b.topwork ? `<div class="topwork-badge">&#9881; ${t('topwork_label')} ${b.topwork}</div>` : '';
+
+  const tasksHtml = b.assignedTasks.length
+    ? b.assignedTasks.map((task,i) => `<div class="task-item">
+        <div class="task-dot"></div>
+        <div class="task-text" style="flex:1">${task}</div>
+      </div>`).join('')
+    : `<div class="no-tasks">${t('no_tasks')}</div>`;
+
+  // Check-in section — shows big button if URL has ?checkin=1 (from QR scan)
+  const isQRScan = new URLSearchParams(window.location.search).get('checkin') === '1';
+  const alreadyCheckedIn = b.checkins && b.checkins.some(c => {
+    const cDate = new Date(c.time);
+    const today = new Date();
+    return cDate.toDateString() === today.toDateString();
+  });
+  let checkinHtml = '';
+  if (isQRScan && !alreadyCheckedIn) {
+    checkinHtml = `<div class="checkin-card" style="background:#fff;border:3px solid #2D6A4F;border-radius:16px;padding:22px 20px;text-align:center;box-shadow:0 4px 20px rgba(27,67,50,.18);margin-bottom:4px">
+      <div style="font-size:42px;margin-bottom:8px">&#128204;</div>
+      <div style="font-size:20px;font-weight:800;color:#1B4332;margin-bottom:6px">${t('checkin_title')}</div>
+      <div style="font-size:14px;color:#374151;margin-bottom:18px;line-height:1.6">${t('checkin_sub')}</div>
+      <div style="display:flex;gap:10px;margin-bottom:16px">
+        <div style="flex:1">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">&#128101; ${t('crew_size')}</div>
+          <input id="checkin-crew" type="number" min="1" max="99" value="1" style="width:100%;background:#F3F4F0;border:2px solid #E5E7EB;border-radius:10px;padding:12px;font-size:22px;font-weight:800;color:#111827;font-family:inherit;outline:none;text-align:center">
+        </div>
+        <div style="flex:1.4">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">&#128119; ${t('foreman')}</div>
+          <input id="checkin-foreman" type="text" placeholder="${t('foreman_placeholder')}" style="width:100%;background:#F3F4F0;border:2px solid #E5E7EB;border-radius:10px;padding:12px;font-size:14px;color:#111827;font-family:inherit;outline:none">
+        </div>
+      </div>
+      <button class="checkin-btn" onclick="doCheckin('${id}')" style="background:#1B4332;color:#fff;border:none;border-radius:12px;padding:18px 24px;font-size:18px;font-weight:800;cursor:pointer;font-family:inherit;width:100%;margin-top:4px;letter-spacing:.01em">&#10003; Confirm Arrival / Confirmar Llegada</button>
+    </div>`;
+  } else if (alreadyCheckedIn) {
+    const last = b.checkins[b.checkins.length-1];
+    checkinHtml = `<div class="checkin-card checkin-done">
+      <div class="checkin-icon">&#10003;</div>
+      <div class="checkin-title">${t('checkin_done')}</div>
+      <div class="checkin-sub">
+        ${last.crew ? '<strong>' + last.crew + ' worker' + (last.crew > 1 ? 's' : '') + '</strong> &mdash; ' : ''}
+        ${last.foreman ? last.foreman + ' &mdash; ' : ''}
+        ${new Date(last.time).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
+      </div>
+    </div>`;
+  }
+
+  const irrigStatus = getIrrigationStatus(b);
+  let irrigHtml;
+  if (irrigStatus && irrigStatus.wet) {
+    irrigHtml = `<div class="compliance-value rei-active">&#9888; Field Wet / Campo Mojado &mdash; ${irrigStatus.daysLeft} day${irrigStatus.daysLeft!==1?'s':''} remaining</div>
+      <div class="compliance-sub">Est. dry: ${irrigStatus.dryDate} &nbsp;&middot;&nbsp; ${irrigStatus.irrigType}</div>
+      <div class="compliance-sub" style="margin-top:3px;color:var(--red);font-weight:600">No heavy equipment / No equipo pesado &mdash; No spray rigs / No fumigadoras</div>`;
+  } else if (irrigStatus && !irrigStatus.wet) {
+    irrigHtml = `<div class="compliance-value rei-clear">&#10003; Field Dry / Campo Seco</div>
+      <div class="compliance-sub">Last irrigated: ${b.lastIrrigationType ? b.lastIrrigationType + ' &mdash; ' : ''}${b.lastIrrigation || 'No record'}</div>`;
+  } else {
+    irrigHtml = `<div class="compliance-value rei-clear">&#10003; Field Dry / Campo Seco</div>
+      <div class="compliance-sub">No irrigation on record / Sin registro de riego</div>`;
+  }
+
+  const reiStatus = getReiStatus(b);
+  let reiHtml;
+  if (reiStatus && reiStatus.active) {
+    reiHtml = `<div class="compliance-value rei-active">&#9888; Restricted &mdash; ${reiStatus.daysLeft} day${reiStatus.daysLeft!==1?'s':''} remaining</div>
+      <div class="compliance-sub">Expires: ${reiStatus.expiry} &nbsp;&middot;&nbsp; ${reiStatus.chemical}</div>
+      <div class="compliance-sub" style="margin-top:3px;color:var(--red);font-weight:600">No entry without PPE / No entrar sin equipo de proteccion</div>`;
+  } else if (reiStatus && !reiStatus.active) {
+    reiHtml = `<div class="compliance-value rei-clear">&#10003; Clear / Despejado</div>
+      <div class="compliance-sub">${t('last_spray')}: ${b.lastSpray || 'None on record'}</div>`;
+  } else {
+    reiHtml = `<div class="compliance-value rei-clear">&#10003; Clear / Despejado</div>
+      <div class="compliance-sub">${t('rei_none')}</div>`;
+  }
+
+  document.getElementById('block-content').innerHTML = `
+    <div class="block-hero">
+      <div class="block-id-display">${b.displayId} &nbsp;&middot;&nbsp; ${t('block_info')}</div>
+      <div class="block-name">${variety}</div>
+      <div class="block-ranch">${ranch} &nbsp;&middot;&nbsp; ${b.acreage} ${t('acres')}</div>
+      <div class="block-badges">
+        <span class="badge"><span class="badge-icon">&#127807;</span> ${b.rootstock}</span>
+        <span class="badge"><span class="badge-icon">&#128197;</span> ${b.plantYear}</span>
+        <span class="badge"><span class="badge-icon">&#128205;</span> ${b.county}</span>
+      </div>
+      ${topworkBadge}
+    </div>
+
+    ${checkinHtml ? '<div class="checkin-section" style="padding:16px 20px 0">' + checkinHtml + '</div>' : ''}
+
+    <div class="nav-section">
+      <a class="nav-btn" href="${navUrl}" target="_blank">
+        <span class="nav-btn-icon">&#127919;</span>
+        ${t('navigate')}
+      </a>
+    </div>
+
+    <div class="details-section">
+      <div class="section-title">${t('field_details')}</div>
+      <div class="details-grid">
+        <div class="detail-card highlight">
+          <div class="detail-label">${t('variety')}</div>
+          <div class="detail-value">${variety}</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">${t('rootstock')}</div>
+          <div class="detail-value">${b.rootstock}</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">${t('spacing')}</div>
+          <div class="detail-value">${b.spacing}</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">${t('planted')}</div>
+          <div class="detail-value">${b.plantYear}</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">${t('acreage')}</div>
+          <div class="detail-value">${b.acreage} ${t('acres')}</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">${t('site_id')}</div>
+          <div class="detail-value">${b.siteId}</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">${t('orig_block')}</div>
+          <div class="detail-value">${b.origBlock}</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">${t('coords')}</div>
+          <div class="detail-value" style="font-size:11px">${b.lat}, ${b.lng}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="compliance-section">
+      <div class="section-title">${t('compliance')}</div>
+      <div class="compliance-card">
+        <div class="compliance-header">
+          <span class="compliance-icon">&#128137;</span>
+          <span class="compliance-title">${t('rei')}</span>
+        </div>
+        ${reiHtml}
+      </div>
+      <div class="compliance-card" style="margin-top:10px">
+        <div class="compliance-header">
+          <span class="compliance-icon">&#128167;</span>
+          <span class="compliance-title">${t('field_condition')}</span>
+        </div>
+        ${irrigHtml}
+      </div>
+    </div>
+
+    <div class="tasks-section">
+      <div class="section-title">${t('tasks')}</div>
+      ${tasksHtml}
+      <button class="log-btn" style="margin-top:10px;background:var(--blue-bg);border-color:var(--blue-bd);color:var(--blue-bd)" onclick="openAssignModal()">
+        &#128203; ${t('assign_task')}
+      </button>
+    </div>
+
+    <div class="share-section">
+      <div class="section-title">${t('share_work_order')}</div>
+      <button class="share-btn share-btn-wa" onclick="shareWhatsApp('${id}', b)" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:#E7F8EE;border:2px solid #25D366;border-radius:14px;padding:18px 16px;font-size:17px;font-weight:700;color:#128C7E;cursor:pointer;font-family:inherit;margin-bottom:12px;min-height:60px">
+        <span style="font-size:22px">&#128172;</span>
+        <span>Send via WhatsApp / Enviar por WhatsApp</span>
+      </button>
+      <button class="share-btn" onclick="copyShareLink('${id}')" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:#fff;border:2px solid #E5E7EB;border-radius:14px;padding:18px 16px;font-size:17px;font-weight:700;color:#374151;cursor:pointer;font-family:inherit;margin-bottom:12px;min-height:60px">
+        <span style="font-size:22px">&#128279;</span>
+        <span>Copy Worker Link / Copiar Enlace</span>
+      </button>
+      <div id="link-copied-msg" style="display:none;font-size:12px;color:var(--g600);margin-top:6px;text-align:center">
+        &#10003; Link copied! / Enlace copiado!
+      </div>
+    </div>
+
+    <div class="log-section">
+      <button class="log-btn" onclick="openModal()">
+        &#128203; ${t('log_activity')}
+      </button>
+    </div>
+  `;
+
+  // Inject check-in card via DOM (not innerHTML) to preserve all styles
+  buildCheckinCard(id, b);
+}
+
+function buildCheckinCard(id, b) {
+  const isQRScan = new URLSearchParams(window.location.search).get('checkin') === '1';
+  if (!isQRScan) return;
+
+  const alreadyCheckedIn = b.checkins && b.checkins.some(c =>
+    new Date(c.time).toDateString() === new Date().toDateString()
+  );
+
+  // Find or create the checkin section
+  let sec = document.querySelector('.checkin-section');
+  if (!sec) {
+    sec = document.createElement('div');
+    sec.className = 'checkin-section';
+    sec.style.cssText = 'padding:16px 20px 12px';
+    const navSection = document.querySelector('.nav-section');
+    if (navSection) navSection.parentNode.insertBefore(sec, navSection);
+  }
+
+  const card = document.createElement('div');
+  card.style.cssText = 'background:#fff;border:3px solid #2D6A4F;border-radius:16px;padding:22px 20px;text-align:center;box-shadow:0 4px 20px rgba(27,67,50,.18)';
+
+  if (alreadyCheckedIn && b.checkins) {
+    const last = b.checkins[b.checkins.length-1];
+    const timeStr = new Date(last.time).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    card.style.borderColor = '#16A34A';
+    card.style.background = '#F0FDF4';
+    card.innerHTML =
+      '<div style="font-size:48px;margin-bottom:8px">&#10003;</div>' +
+      '<div style="font-size:22px;font-weight:800;color:#15803D;margin-bottom:8px">Checked In!</div>' +
+      '<div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:4px">' +
+        (last.crew||1) + ' worker' + ((last.crew||1)>1?'s':'') +
+        (last.foreman ? ' &mdash; ' + last.foreman : '') +
+      '</div>' +
+      '<div style="font-size:13px;color:#6B7280">' + timeStr + '</div>';
+    sec.innerHTML = '';
+    sec.appendChild(card);
+    return;
+  }
+
+  // Build check-in form
+  card.innerHTML =
+    '<div style="font-size:42px;margin-bottom:8px">&#128204;</div>' +
+    '<div style="font-size:20px;font-weight:800;color:#1B4332;margin-bottom:6px">QR Check-In Detected</div>' +
+    '<div style="font-size:14px;color:#374151;margin-bottom:18px;line-height:1.6">Enter crew size and confirm arrival</div>';
+
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:10px;margin-bottom:16px;text-align:left';
+
+  const crewDiv = document.createElement('div');
+  crewDiv.style.flex = '1';
+  crewDiv.innerHTML = '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">&#128101; Workers</div>';
+  const crewInput = document.createElement('input');
+  crewInput.id = 'checkin-crew';
+  crewInput.type = 'number';
+  crewInput.min = '1';
+  crewInput.max = '99';
+  crewInput.value = '1';
+  crewInput.style.cssText = 'width:100%;background:#F3F4F0;border:2px solid #E5E7EB;border-radius:10px;padding:14px 10px;font-size:26px;font-weight:800;color:#111827;font-family:inherit;outline:none;text-align:center';
+  crewDiv.appendChild(crewInput);
+
+  const foremanDiv = document.createElement('div');
+  foremanDiv.style.flex = '1.4';
+  foremanDiv.innerHTML = '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">&#128119; Foreman</div>';
+  const foremanInput = document.createElement('input');
+  foremanInput.id = 'checkin-foreman';
+  foremanInput.type = 'text';
+  foremanInput.placeholder = 'Name (optional)';
+  foremanInput.style.cssText = 'width:100%;background:#F3F4F0;border:2px solid #E5E7EB;border-radius:10px;padding:14px 10px;font-size:14px;color:#111827;font-family:inherit;outline:none';
+  foremanDiv.appendChild(foremanInput);
+
+  row.appendChild(crewDiv);
+  row.appendChild(foremanDiv);
+  card.appendChild(row);
+
+  const btn = document.createElement('button');
+  btn.style.cssText = 'background:#1B4332;color:#fff;border:none;border-radius:12px;padding:20px 24px;font-size:20px;font-weight:800;cursor:pointer;font-family:inherit;width:100%;letter-spacing:.01em;margin-top:4px';
+  btn.innerHTML = '&#10003; Confirm Arrival / Confirmar Llegada';
+  btn.onclick = function(){ doCheckin(id); };
+  card.appendChild(btn);
+
+  sec.innerHTML = '';
+  sec.appendChild(card);
+}
+
+// ── NOT FOUND ─────────────────────────────────────────────────────────────
+function getTodayCheckin(b) {
+  if (!b.checkins || !b.checkins.length) return null;
+  const today = new Date().toDateString();
+  return b.checkins.filter(c => new Date(c.time).toDateString() === today)
+    .sort((a,b) => new Date(b.time) - new Date(a.time))[0] || null;
+}
+
+function getLastActiveTask(b) {
+  const tasks = b.assignedTasks.filter(t =>
+    t.includes('TASK:') && !t.includes('COMPLETED')
+  );
+  if (!tasks.length) return null;
+  const raw = tasks[0].replace('TASK:', '').trim();
+  // Shorten for display — take first segment before slash or comma
+  return raw.split('/')[0].split(',')[0].trim();
+}
+
+function getBlockStatus(b) {
+  // RED — REI active (not safe for entry without PPE)
+  const rei = getReiStatus(b);
+  if (rei && rei.active) {
+    return {
+      cls: 'status-red',
+      label: lang==='es' ? 'REI Activo ' + rei.daysLeft + 'd' : 'REI ' + rei.daysLeft + 'd left',
+      icon: '&#9888;',
+      priority: 3
+    };
+  }
+
+  // ORANGE — active check-in today (workers on site right now)
+  const checkin = getTodayCheckin(b);
+  if (checkin) {
+    const crew = checkin.crew || 1;
+    const task = getLastActiveTask(b);
+    const crewLabel = crew + (lang==='es' ? ' trabajador' + (crew>1?'es':'') : ' worker' + (crew>1?'s':''));
+    const taskShort = task ? ' — ' + (task.length > 14 ? task.substring(0,12)+'..' : task) : '';
+    return {
+      cls: 'status-orange',
+      label: crewLabel + taskShort,
+      icon: '&#128119;',
+      priority: 4,
+      crew: crew,
+      task: task
+    };
+  }
+
+  // YELLOW — field wet (no heavy equipment)
+  const irrig = getIrrigationStatus(b);
+  if (irrig && irrig.wet) {
+    return {
+      cls: 'status-yellow',
+      label: lang==='es' ? 'Campo Mojado ' + irrig.daysLeft + 'd' : 'Wet ' + irrig.daysLeft + 'd left',
+      icon: '&#128167;',
+      priority: 2
+    };
+  }
+
+  // ORANGE — active tasks assigned (no one checked in yet)
+  const activeTasks = b.assignedTasks.filter(t =>
+    t.includes('TASK:') && !t.includes('COMPLETED') && !t.includes('CHECK-IN')
+  );
+  if (activeTasks.length > 0) {
+    const task = getLastActiveTask(b);
+    const taskShort = task ? (task.length > 16 ? task.substring(0,14)+'..' : task) : activeTasks.length + ' task' + (activeTasks.length>1?'s':'');
+    return {
+      cls: 'status-orange',
+      label: taskShort,
+      icon: '&#128203;',
+      priority: 1
+    };
+  }
+
+  // GREEN — all clear
+  return {
+    cls: 'status-green',
+    label: lang==='es' ? 'Despejado' : 'Clear',
+    icon: '&#10003;',
+    priority: 0
+  };
+}
+
+function renderNotFound() {
+  // Sort by status priority (red first, then orange, yellow, green) then by id
+  const sorted = Object.entries(BLOCKS).sort((a, b) => {
+    const sa = getBlockStatus(a[1]);
+    const sb = getBlockStatus(b[1]);
+    if (sb.priority !== sa.priority) return sb.priority - sa.priority;
+    return a[0].localeCompare(b[0]);
+  });
+
+  const listHtml = sorted.map(([id, b]) => {
+    const status = getBlockStatus(b);
+    const variety = lang==='es' ? b.varietyEs : b.variety;
+    const varShort = variety.length > 18 ? variety.substring(0,16)+'...' : variety;
+    const checkinToday = getTodayCheckin(b);
+    const checkinBadge = checkinToday
+      ? `<div style="font-size:10px;color:#9A3412;font-weight:600;margin-top:3px">
+           &#128205; ${checkinToday.crew||1} ${lang==='es'?'en sitio':'on site'}
+           ${checkinToday.foreman ? ' — ' + checkinToday.foreman : ''}
+         </div>`
+      : '';
+    return `<div class="block-list-item ${status.cls}" onclick="window.location.hash='${id}'">
+      <div class="bli-status-dot"></div>
+      <div class="bli-id">${b.displayId}</div>
+      <div class="bli-variety">${varShort}</div>
+      <div class="bli-ranch">${lang==='es'?b.ranchEs:b.ranch}</div>
+      <div class="bli-status-text">${status.icon} ${status.label}</div>
+      ${checkinBadge}
+    </div>`;
+  }).join('');
+
+  // Legend
+  const legend = `<div style="display:flex;flex-wrap:wrap;gap:8px;padding:0 20px 14px;align-items:center">
+    <span style="font-size:11px;font-weight:700;color:var(--tx3);margin-right:4px">${lang==='es'?'Estado:':'Status:'}</span>
+    <span style="font-size:11px;background:#FEE2E2;color:#991B1B;border-radius:10px;padding:3px 9px;font-weight:600">&#9888; ${lang==='es'?'REI Activo':'REI Active'}</span>
+    <span style="font-size:11px;background:#FFEDD5;color:#9A3412;border-radius:10px;padding:3px 9px;font-weight:600">&#128119; ${lang==='es'?'Crew en Sitio / Tarea':'Crew On Site / Task'}</span>
+    <span style="font-size:11px;background:#FEF9C3;color:#854D0E;border-radius:10px;padding:3px 9px;font-weight:600">&#128167; ${lang==='es'?'Campo Mojado':'Field Wet'}</span>
+    <span style="font-size:11px;background:var(--g100);color:var(--g800);border-radius:10px;padding:3px 9px;font-weight:600">&#10003; ${lang==='es'?'Despejado':'Clear'}</span>
+  </div>`;
+
+  document.getElementById('block-content').innerHTML = `
+    <div style="background:var(--g900);padding:20px 20px 18px">
+      <div style="font-family:'DM Serif Display',serif;font-size:22px;color:#fff;margin-bottom:4px">M&amp;R Field Blocks</div>
+      <div style="font-size:13px;color:var(--g100)">${Object.keys(BLOCKS).length} ${lang==='es'?'bloques en':'blocks across'} 12 ${lang==='es'?'ranchos':'ranches'}</div>
+    </div>
+    <div style="padding:14px 20px 6px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);margin-bottom:10px">${t('all_blocks')} &mdash; ${lang==='es'?'ordenado por estado':'sorted by status'}</div>
+    </div>
+    ${legend}
+    <div class="block-list">${listHtml}</div>
+  `;
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────
+function openModal(){
+  // Populate chemical dropdown
+  const sel = document.getElementById('log-chemical');
+  sel.innerHTML = '<option value="">Select chemical / Seleccionar quimico</option>';
+  CHEMICALS.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.name;
+    opt.dataset.rei = c.rei;
+    opt.textContent = c.name + (c.rei > 0 ? ' (' + c.rei + 'h REI)' : '');
+    sel.appendChild(opt);
+  });
+  // Set today as default spray date
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('log-spray-date').value = today;
+  const today2 = new Date().toISOString().split('T')[0];
+  document.getElementById('log-irrig-date').value = today2;
+  document.getElementById('modal-log').classList.add('open');
+}
+
+function onActivityTypeChange() {
+  const type = document.getElementById('log-type').value;
+  document.getElementById('spray-fields').style.display = type === 'Spray' ? 'block' : 'none';
+  document.getElementById('irrig-fields').style.display = type === 'Irrigation' ? 'block' : 'none';
+}
+
+function onChemicalChange() {
+  const sel = document.getElementById('log-chemical');
+  const selected = sel.options[sel.selectedIndex];
+  const rei = selected?.dataset?.rei;
+  const isCustom = selected?.value === 'Other / Custom';
+  document.getElementById('custom-chemical-wrap').style.display = isCustom ? 'block' : 'none';
+  if (rei !== undefined && !isCustom) {
+    document.getElementById('log-rei-days').value = rei;
+  } else if (isCustom) {
+    document.getElementById('log-rei-days').value = '';
+  }
+}
+function closeModal(){document.getElementById('modal-log').classList.remove('open');}
+document.getElementById('modal-log').addEventListener('click',function(e){if(e.target===this)closeModal();});
+document.getElementById('modal-assign').addEventListener('click',function(e){if(e.target===this)closeAssignModal();});
+
+function submitLog() {
+  const type = document.getElementById('log-type').value;
+  const worker = document.getElementById('log-worker').value.trim();
+  const notes = document.getElementById('log-notes').value.trim();
+  if(!type){alert('Please select an activity type / Por favor seleccione un tipo de actividad.');return;}
+
+  const block = BLOCKS[currentBlockId];
+  if(!block) return;
+
+  // Handle spray-specific fields
+  if (type === 'Spray') {
+    const chemSel = document.getElementById('log-chemical');
+    const chemName = chemSel.value === 'Other / Custom'
+      ? document.getElementById('log-custom-chemical').value.trim()
+      : chemSel.value;
+    const reiDays = parseInt(document.getElementById('log-rei-days').value) || 0;
+    const sprayDate = document.getElementById('log-spray-date').value;
+    const rate = document.getElementById('log-rate').value.trim();
+
+    if (!chemName) {alert('Please enter a chemical name.');return;}
+    if (!sprayDate) {alert('Please enter the spray date.');return;}
+
+    // Update block REI data
+    block.lastChemical = chemName;
+    block.reiDays = reiDays;
+    block.lastSprayDate = sprayDate;
+    block.lastSpray = new Date(sprayDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+
+    const entry = new Date(sprayDate).toLocaleDateString() +
+      ' - Spray: ' + chemName +
+      ' | REI: ' + reiDays + 'h' +
+      (rate ? ' | Rate: ' + rate : '') +
+      (worker ? ' (' + worker + ')' : '') +
+      (notes ? ' - ' + notes : '');
+    block.assignedTasks.unshift(entry);
+  } else if (type === 'Irrigation') {
+    const irrigType = document.getElementById('log-irrig-type').value;
+    const irrigDate = document.getElementById('log-irrig-date').value;
+    const dryDays = parseInt(document.getElementById('log-dry-days').value) || 3;
+
+    if (!irrigDate) {alert('Please enter the irrigation date / Por favor ingrese la fecha de riego.');return;}
+
+    block.lastIrrigationType = irrigType || 'Irrigation';
+    block.lastIrrigationDate = irrigDate;
+    block.dryDays = dryDays;
+    block.lastIrrigation = new Date(irrigDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+
+    const entry = new Date(irrigDate).toLocaleDateString() +
+      ' - Irrigation: ' + (irrigType || 'General') +
+      ' | Est. dry in ' + dryDays + ' days' +
+      (worker ? ' (' + worker + ')' : '') +
+      (notes ? ' - ' + notes : '');
+    block.assignedTasks.unshift(entry);
+  } else {
+    const entry = new Date().toLocaleDateString() + ' - ' + type +
+      (worker ? ' (' + worker + ')' : '') +
+      (notes ? ' - ' + notes : '');
+    block.assignedTasks.unshift(entry);
+  }
+
+  closeModal();
+  // Reset form
+  document.getElementById('log-type').value = '';
+  document.getElementById('log-worker').value = '';
+  document.getElementById('log-notes').value = '';
+  document.getElementById('spray-fields').style.display = 'none';
+  document.getElementById('irrig-fields').style.display = 'none';
+  document.getElementById('log-chemical').value = '';
+  document.getElementById('log-rei-days').value = '';
+  document.getElementById('log-rate').value = '';
+  document.getElementById('custom-chemical-wrap').style.display = 'none';
+  document.getElementById('log-irrig-type').value = '';
+  document.getElementById('log-irrig-date').value = '';
+  document.getElementById('log-dry-days').value = '';
+
+  render();
+  alert(lang==='en' ? 'Activity logged successfully.' : 'Actividad registrada con exito.');
+}
+
+// ── SHARE & WORK ORDER ────────────────────────────────────────────────────
+function getBaseUrl() {
+  return window.location.href.split('#')[0].split('?')[0];
+}
+
+function copyShareLink(blockId) {
+  const url = getBaseUrl() + '?block=' + blockId + '&checkin=1#' + blockId;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => {
+      // Show in block page
+      const msg = document.getElementById('link-copied-msg');
+      if (msg) { msg.style.display='block'; setTimeout(()=>msg.style.display='none', 3000); }
+      // Show in assign modal if open
+      const assignMsg = document.getElementById('assign-link-copied');
+      if (assignMsg) { assignMsg.style.display='block'; setTimeout(()=>assignMsg.style.display='none', 3000); }
+    });
+  } else {
+    prompt('Copy this link:', url);
+  }
+}
+
+function shareWhatsApp(blockId, block) {
+  const url = getBaseUrl() + '?block=' + blockId + '&checkin=1#' + blockId;
+  const variety = lang==='es' ? block.varietyEs : block.variety;
+  const ranch = lang==='es' ? block.ranchEs : block.ranch;
+  const tasks = block.assignedTasks.length
+    ? block.assignedTasks.slice(0,3).map((t,i)=>(i+1)+'. '+t).join('\n')
+    : 'No tasks assigned / Sin tareas asignadas';
+  const msg = `*M&R Farm Management*\n` +
+    `*Block:* ${block.displayId} - ${variety}\n` +
+    `*Ranch:* ${ranch}\n` +
+    `*Acreage:* ${block.acreage} acres\n\n` +
+    `*Tasks / Tareas:*\n${tasks}\n\n` +
+    `*Navigate / Navegar:*\n` +
+    `https://www.google.com/maps/search/?api=1&query=${block.lat},${block.lng}\n\n` +
+    `*Check in when you arrive / Registrate al llegar:*\n${url}`;
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+}
+
+// ── CHECK-IN ──────────────────────────────────────────────────────────────
+function doCheckin(blockId) {
+  const block = BLOCKS[blockId];
+  if (!block) return;
+  const now = new Date();
+  if (!block.checkins) block.checkins = [];
+
+  const crewEl = document.getElementById('checkin-crew');
+  const foremanEl = document.getElementById('checkin-foreman');
+  const crew = crewEl ? parseInt(crewEl.value) || 1 : 1;
+  const foreman = foremanEl ? foremanEl.value.trim() : '';
+
+  if (crew < 1) { alert('Please enter number of workers / Por favor ingrese el numero de trabajadores'); return; }
+
+  const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+
+  function saveCheckin(lat, lng, accuracy) {
+    const checkin = {
+      time: now.toISOString(),
+      crew: crew,
+      foreman: foreman,
+      lat: lat,
+      lng: lng,
+      accuracy: accuracy
+    };
+    block.checkins.push(checkin);
+    const entry = now.toLocaleDateString() + ' ' + timeStr +
+      ' - CHECK-IN: ' + crew + ' worker' + (crew > 1 ? 's' : '') +
+      (foreman ? ' - Foreman: ' + foreman : '') +
+      (lat ? ' (GPS: ' + lat + ', ' + lng + ' +/-' + accuracy + ')' : '');
+    block.assignedTasks.unshift(entry);
+    render();
+    showCheckinSuccess(now, crew, foreman, lat ? lat + ', ' + lng : null);
+  }
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => saveCheckin(
+        pos.coords.latitude.toFixed(5),
+        pos.coords.longitude.toFixed(5),
+        Math.round(pos.coords.accuracy) + 'm'
+      ),
+      err => saveCheckin(null, null, null),
+      {timeout: 5000, enableHighAccuracy: true}
+    );
+  } else {
+    saveCheckin(null, null, null);
+  }
+}
+
+function showCheckinSuccess(time, crew, foreman, coords) {
+  const timeStr = time.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  // Replace the checkin section with a bold success card
+  const sections = document.querySelectorAll('.checkin-section');
+  sections.forEach(sec => {
+    sec.innerHTML = '<div class="checkin-card checkin-done" style="border-color:#16A34A;background:#F0FDF4">' +
+      '<div class="checkin-icon">&#10003;</div>' +
+      '<div class="checkin-title" style="color:#15803D;font-size:22px">Checked In!</div>' +
+      '<div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:4px">' +
+        crew + ' worker' + (crew>1?'s':'') +
+        (foreman ? ' &mdash; ' + foreman : '') +
+      '</div>' +
+      '<div style="font-size:13px;color:var(--tx3)">' + timeStr +
+        (coords ? '<br><span style="font-size:11px">GPS: ' + coords + '</span>' : '') +
+      '</div>' +
+    '</div>';
+  });
+}
+
+// ── ASSIGN TASK MODAL ─────────────────────────────────────────────────────
+function openAssignModal() {
+  document.getElementById('modal-assign').classList.add('open');
+}
+function closeAssignModal() {
+  document.getElementById('modal-assign').classList.remove('open');
+  // Reset modal back to form view after closing
+  setTimeout(function() {
+    const modal = document.querySelector('#modal-assign .modal');
+    modal.innerHTML = `
+      <div class="modal-handle"></div>
+      <h2>Assign Task / Asignar Tarea</h2>
+      <label class="form-label">Task Description / Descripcion de la Tarea</label>
+      <textarea class="form-input" id="assign-task-input" style="height:90px" placeholder="e.g. Irrigate rows 1-20 / Regar filas 1-20"></textarea>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--tx3);margin-bottom:8px">Quick tasks / Tareas rapidas</div>
+        <span class="assign-tag" onclick="quickTask('Irrigate full block / Regar bloque completo')">Irrigate / Regar</span>
+        <span class="assign-tag" onclick="quickTask('Apply spray treatment / Aplicar tratamiento de fumigacion')">Spray / Fumigar</span>
+        <span class="assign-tag" onclick="quickTask('Prune trees / Podar arboles')">Prune / Podar</span>
+        <span class="assign-tag" onclick="quickTask('Apply fertilizer / Aplicar fertilizante')">Fertilize / Fertilizar</span>
+        <span class="assign-tag" onclick="quickTask('General inspection / Inspeccion general')">Inspect / Inspeccionar</span>
+        <span class="assign-tag" onclick="quickTask('Pick up harvest bins / Recoger cajas de cosecha')">Harvest / Cosechar</span>
+        <span class="assign-tag" onclick="quickTask('Equipment repair needed / Reparacion de equipo necesaria')">Repair / Reparar</span>
+      </div>
+      <div class="form-actions">
+        <button class="btn-cancel" onclick="closeAssignModal()">Cancel / Cancelar</button>
+        <button class="btn-submit" onclick="submitAssignTask()">Assign / Asignar</button>
+      </div>
+    `;
+    // Re-attach background click handler
+    document.getElementById('modal-assign').addEventListener('click', function(e){if(e.target===this)closeAssignModal();});
+  }, 300);
+}
+function quickTask(text) {
+  document.getElementById('assign-task-input').value = text;
+}
+function submitAssignTask() {
+  const task = document.getElementById('assign-task-input').value.trim();
+  if (!task) { alert('Please enter a task description.'); return; }
+  const block = BLOCKS[currentBlockId];
+  if (!block) return;
+
+  // Detect if this is an irrigation or spray task
+  const taskLower = task.toLowerCase();
+  const isIrrig = taskLower.includes('irrigat') || taskLower.includes('regar') || taskLower.includes('riego');
+  const isSpray = taskLower.includes('spray') || taskLower.includes('fumig') || taskLower.includes('chemical');
+
+  if (isIrrig) {
+    showIrrigPrompt(task, block);
+    return;
+  }
+  if (isSpray) {
+    showSprayPrompt(task, block);
+    return;
+  }
+
+  saveTaskAndShowShare(task, block);
+}
+
+function showIrrigPrompt(task, block) {
+  const today = new Date().toISOString().split('T')[0];
+  const modal = document.querySelector('#modal-assign .modal');
+  modal.innerHTML = `
+    <div class="modal-handle"></div>
+    <h2>&#128167; Irrigation Details / Detalles de Riego</h2>
+    <div style="background:var(--amber-bg);border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--amber)">
+      &#9888; Logging irrigation will mark this field <strong>WET</strong> — no heavy equipment or spray rigs<br>
+      <span style="color:#B45309">Registrar riego marcara el campo como <strong>MOJADO</strong></span>
+    </div>
+    <label class="form-label">Irrigation Type / Tipo de Riego</label>
+    <select class="form-input" id="prompt-irrig-type">
+      <option value="Flood / Inundacion">Flood / Inundacion</option>
+      <option value="Drip / Goteo">Drip / Goteo</option>
+      <option value="Micro-sprinkler / Micro-aspersor">Micro-sprinkler / Micro-aspersor</option>
+      <option value="Sprinkler / Aspersor">Sprinkler / Aspersor</option>
+      <option value="Furrow / Surco">Furrow / Surco</option>
+    </select>
+    <label class="form-label">Irrigation Date / Fecha de Riego</label>
+    <input class="form-input" id="prompt-irrig-date" type="date" value="${today}">
+    <label class="form-label">Est. Days to Dry / Dias Est. para Secar</label>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+      <input class="form-input" id="prompt-dry-days" type="number" min="1" max="14" value="3" style="margin-bottom:0;flex:1">
+      <span style="font-size:12px;color:var(--tx3);white-space:nowrap">days / dias</span>
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="saveTaskAndShowShare('${task}', BLOCKS['${currentBlockId}'])">Skip / Omitir</button>
+      <button class="btn-submit" onclick="saveIrrigAndTask('${task}')">Save &amp; Assign / Guardar</button>
+    </div>
+  `;
+}
+
+function showSprayPrompt(task, block) {
+  const today = new Date().toISOString().split('T')[0];
+  const chemOptions = CHEMICALS.map(c =>
+    '<option value="' + c.name + '" data-rei="' + c.rei + '">' + c.name + (c.rei > 0 ? ' (' + c.rei + 'h REI)' : '') + '</option>'
+  ).join('');
+  const modal = document.querySelector('#modal-assign .modal');
+  modal.innerHTML = `
+    <div class="modal-handle"></div>
+    <h2>&#128137; Spray Details / Detalles de Fumigacion</h2>
+    <div style="background:var(--red-bg);border:1px solid #FECACA;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--red)">
+      &#9888; Logging a spray will set REI restriction on this block<br>
+      <span>Registrar fumigacion activara restriccion REI en este bloque</span>
+    </div>
+    <label class="form-label">Chemical / Quimico</label>
+    <select class="form-input" id="prompt-chemical" onchange="
+      var opt=this.options[this.selectedIndex];
+      var rei=opt.dataset.rei;
+      if(rei!==undefined) document.getElementById('prompt-rei').value=rei;
+    ">
+      <option value="">Select / Seleccionar</option>
+      ${chemOptions}
+    </select>
+    <label class="form-label">REI Hours / Horas REI</label>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+      <input class="form-input" id="prompt-rei" type="number" min="0" max="72" placeholder="e.g. 24" style="margin-bottom:0;flex:1">
+      <span style="font-size:12px;color:var(--tx3);white-space:nowrap">hours / horas</span>
+    </div>
+    <label class="form-label">Spray Date / Fecha de Fumigacion</label>
+    <input class="form-input" id="prompt-spray-date" type="date" value="${today}">
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="saveTaskAndShowShare('${task}', BLOCKS['${currentBlockId}'])">Skip / Omitir</button>
+      <button class="btn-submit" onclick="saveSprayAndTask('${task}')">Save &amp; Assign / Guardar</button>
+    </div>
+  `;
+}
+
+function saveIrrigAndTask(task) {
+  const block = BLOCKS[currentBlockId];
+  const irrigType = document.getElementById('prompt-irrig-type').value;
+  const irrigDate = document.getElementById('prompt-irrig-date').value;
+  const dryDays = parseInt(document.getElementById('prompt-dry-days').value) || 3;
+  if (!irrigDate) { alert('Please enter irrigation date.'); return; }
+  block.lastIrrigationType = irrigType;
+  block.lastIrrigationDate = irrigDate;
+  block.dryDays = dryDays;
+  block.lastIrrigation = new Date(irrigDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  saveTaskAndShowShare(task, block);
+}
+
+function saveSprayAndTask(task) {
+  const block = BLOCKS[currentBlockId];
+  const chem = document.getElementById('prompt-chemical').value;
+  const rei = parseInt(document.getElementById('prompt-rei').value) || 0;
+  const sprayDate = document.getElementById('prompt-spray-date').value;
+  if (!chem) { alert('Please select a chemical.'); return; }
+  if (!sprayDate) { alert('Please enter spray date.'); return; }
+  block.lastChemical = chem;
+  block.reiDays = rei;
+  block.lastSprayDate = sprayDate;
+  block.lastSpray = new Date(sprayDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  saveTaskAndShowShare(task, block);
+}
+
+function saveTaskAndShowShare(task, block) {
+  const entry = 'TASK: ' + task;
+  block.assignedTasks.push(entry);
+
+  // Switch modal to share confirmation view
+  const modal = document.querySelector('#modal-assign .modal');
+  const variety = lang==='es' ? block.varietyEs : block.variety;
+  const ranch = lang==='es' ? block.ranchEs : block.ranch;
+  modal.innerHTML = `
+    <div class="modal-handle"></div>
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="font-size:36px;margin-bottom:8px">&#10003;</div>
+      <div style="font-size:18px;font-weight:700;color:var(--g800);margin-bottom:4px">Task Assigned / Tarea Asignada</div>
+      <div style="font-size:13px;color:var(--tx3);line-height:1.5">${block.displayId} &mdash; ${variety}<br>${ranch}</div>
+    </div>
+    <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--g800)">
+      <strong>Task:</strong> ${task}
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);margin-bottom:10px">Send to Worker / Enviar al Trabajador</div>
+    <button class="share-btn share-btn-wa" style="margin-bottom:12px" onclick="shareWhatsApp('${currentBlockId}', BLOCKS['${currentBlockId}'])">
+      <span class="share-btn-icon">&#128172;</span>
+      <span>Send via WhatsApp</span>
+    </button>
+    <button class="share-btn" style="margin-bottom:16px" onclick="copyShareLink('${currentBlockId}')">
+      <span class="share-btn-icon">&#128279;</span>
+      <span>Copy Worker Link</span>
+    </button>
+    <div id="assign-link-copied" style="display:none;text-align:center;font-size:12px;color:var(--g600);margin-bottom:12px">&#10003; Link copied! / Enlace copiado!</div>
+    <button class="btn-cancel" style="width:100%;padding:13px;border-radius:10px;font-size:15px" onclick="closeAssignModal();render()">Done / Listo</button>
+  `;
+}
+function toast(msg) {
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--g900);color:#fff;padding:9px 18px;border-radius:22px;font-size:13px;font-weight:500;z-index:400;white-space:nowrap';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2500);
+}
+
+function goHome() {
+  window.location.hash = '';
+  try { window.history.replaceState(null, '', window.location.pathname); } catch(e) {}
+  render();
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────
+window.addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>
