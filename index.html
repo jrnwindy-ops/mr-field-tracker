@@ -2398,22 +2398,8 @@ async function doCheckin(blockId) {
 }
 
 function showCheckinSuccess(time, crew, foreman, coords) {
-  const timeStr = time.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-  // Replace the checkin section with a bold success card
-  const sections = document.querySelectorAll('.checkin-section');
-  sections.forEach(sec => {
-    sec.innerHTML = '<div class="checkin-card checkin-done" style="border-color:#16A34A;background:#F0FDF4">' +
-      '<div class="checkin-icon">&#10003;</div>' +
-      '<div class="checkin-title" style="color:#15803D;font-size:22px">Checked In!</div>' +
-      '<div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:4px">' +
-        crew + ' worker' + (crew>1?'s':'') +
-        (foreman ? ' &mdash; ' + foreman : '') +
-      '</div>' +
-      '<div style="font-size:13px;color:var(--tx3)">' + timeStr +
-        (coords ? '<br><span style="font-size:11px">GPS: ' + coords + '</span>' : '') +
-      '</div>' +
-    '</div>';
-  });
+  // Re-render the block which will now show checkout button via buildCheckinCard
+  render();
 }
 
 // ── ASSIGN TASK MODAL ─────────────────────────────────────────────────────
