@@ -2633,14 +2633,25 @@ async function saveCheckin_cloud(blockId, data) {
 async function doCheckout(blockId, checkin) {
   const block = BLOCKS[blockId];
   if (!block) return;
+
+  // Prevent double checkout
+  if (checkin.checkout) { alert('Already checked out.'); return; }
+
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   const elapsed = ((now - new Date(checkin.time)) / 3600000).toFixed(1);
 
-  // Mark as checked out locally
+  // Mark as checked out locally on the checkin object AND in the block.checkins array
   checkin.checkout = now.toISOString();
+  if (block.checkins) {
+    block.checkins.forEach(c => {
+      if (c.time === checkin.time && !c.checkout) {
+        c.checkout = now.toISOString();
+      }
+    });
+  }
 
-  // Add to activity log
+  // Log to activity list
   const entry = now.toLocaleDateString() + ' ' + timeStr +
     ' - CHECK-OUT: ' + (checkin.crew||1) + ' worker' + ((checkin.crew||1)>1?'s':'') +
     (checkin.foreman ? ' - ' + checkin.foreman : '') +
@@ -2650,14 +2661,20 @@ async function doCheckout(blockId, checkin) {
   // Save to Supabase
   if (cloudOk) {
     try {
-      // Update checkin record with checkout time
-      await sb.from('block_checkins')
-        .update({checkout: now.toISOString()})
+      // Find the checkin record by block_id and null checkout and update it
+      const {data: rows} = await sb.from('block_checkins')
+        .select('id')
         .eq('block_id', blockId)
         .is('checkout', null)
         .order('created_at', {ascending: false})
         .limit(1);
-      // Log checkout activity
+
+      if (rows && rows.length > 0) {
+        await sb.from('block_checkins')
+          .update({checkout: now.toISOString()})
+          .eq('id', rows[0].id);
+      }
+
       await saveActivity(blockId, {
         activity_type: 'Checkout',
         logged_by: checkin.foreman || '',
@@ -2667,11 +2684,12 @@ async function doCheckout(blockId, checkin) {
     } catch(e) { console.warn('Checkout save error:', e); }
   }
 
-  // Go back to home screen so colors update immediately
   const msg = lang === 'es'
     ? 'Salida confirmada a las ' + timeStr + '\n' + elapsed + ' horas en el sitio'
     : 'Checkout confirmed at ' + timeStr + '\n' + elapsed + ' hours on site';
   alert(msg);
+
+  // Return to home screen — block will now show correct color
   goHome();
 }
 
