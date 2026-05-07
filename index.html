@@ -1842,7 +1842,7 @@ function renderBlock(b, id) {
       </button>
       <button class="share-btn" onclick="copyShareLink('${id}')" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:#fff;border:2px solid #E5E7EB;border-radius:14px;padding:18px 16px;font-size:17px;font-weight:700;color:#374151;cursor:pointer;font-family:inherit;margin-bottom:12px;min-height:60px">
         <span style="font-size:22px">&#128279;</span>
-        <span>Copy Worker Link / Copiar Enlace</span>
+        <span>Copy Work Order / Copiar Orden</span>
       </button>
       <div id="link-copied-msg" style="display:none;font-size:12px;color:var(--g600);margin-top:6px;text-align:center">
         &#10003; Link copied! / Enlace copiado!
@@ -2267,18 +2267,35 @@ function getBaseUrl() {
 }
 
 function copyShareLink(blockId) {
+  const block = BLOCKS[blockId];
+  if (!block) return;
   const url = getBaseUrl() + '?block=' + blockId + '&checkin=1#' + blockId;
+  const variety = lang==='es' ? block.varietyEs : block.variety;
+  const ranch = lang==='es' ? block.ranchEs : block.ranch;
+  const tasks = block.assignedTasks.filter(t => t.includes('TASK:'));
+  const taskList = tasks.length
+    ? tasks.slice(0,3).map((t,i) => (i+1) + '. ' + t.replace('TASK:','').trim()).join('\n')
+    : 'No tasks assigned';
+  const navUrl = 'https://www.google.com/maps/search/?api=1&query=' + block.lat + ',' + block.lng;
+
+  const fullMsg =
+    'M&R Farm Management\n' +
+    'Block: ' + block.displayId + ' - ' + variety + '\n' +
+    'Ranch: ' + ranch + '\n' +
+    'Acreage: ' + block.acreage + ' acres\n\n' +
+    'Tasks:\n' + taskList + '\n\n' +
+    'Navigate to block:\n' + navUrl + '\n\n' +
+    'Check in when you arrive:\n' + url;
+
   if (navigator.clipboard) {
-    navigator.clipboard.writeText(url).then(() => {
-      // Show in block page
+    navigator.clipboard.writeText(fullMsg).then(() => {
       const msg = document.getElementById('link-copied-msg');
       if (msg) { msg.style.display='block'; setTimeout(()=>msg.style.display='none', 3000); }
-      // Show in assign modal if open
       const assignMsg = document.getElementById('assign-link-copied');
       if (assignMsg) { assignMsg.style.display='block'; setTimeout(()=>assignMsg.style.display='none', 3000); }
     });
   } else {
-    prompt('Copy this link:', url);
+    prompt('Copy this message:', fullMsg);
   }
 }
 
@@ -2550,7 +2567,7 @@ async function saveTaskAndShowShare(task, block) {
     </button>
     <button class="share-btn" style="margin-bottom:16px" onclick="copyShareLink('${currentBlockId}')">
       <span class="share-btn-icon">&#128279;</span>
-      <span>Copy Worker Link</span>
+      <span>Copy Work Order</span>
     </button>
     <div id="assign-link-copied" style="display:none;text-align:center;font-size:12px;color:var(--g600);margin-bottom:12px">&#10003; Link copied! / Enlace copiado!</div>
     <button class="btn-cancel" style="width:100%;padding:13px;border-radius:10px;font-size:15px" onclick="closeAssignModal();render()">Done / Listo</button>
