@@ -1947,9 +1947,28 @@ function buildCheckinCard(id, b) {
 // ── NOT FOUND ─────────────────────────────────────────────────────────────
 function getTodayCheckin(b) {
   if (!b.checkins || !b.checkins.length) return null;
-  const today = new Date().toDateString();
-  return b.checkins.filter(c => new Date(c.time).toDateString() === today)
-    .sort((a,b) => new Date(b.time) - new Date(a.time))[0] || null;
+  const now = new Date();
+  const TWELVE_HRS = 12 * 60 * 60 * 1000;
+  return b.checkins.filter(c => {
+    if (c.checkout) return false;
+    const checkinTime = new Date(c.time);
+    const elapsed = now - checkinTime;
+    return elapsed >= 0 && elapsed < TWELVE_HRS;
+  }).sort((a,b) => new Date(b.time) - new Date(a.time))[0] || null;
+}
+
+function getCheckinMeta(checkin) {
+  const now = new Date();
+  const TWELVE_HRS = 12 * 60 * 60 * 1000;
+  const checkinTime = new Date(checkin.time);
+  const elapsed = now - checkinTime;
+  const remaining = TWELVE_HRS - elapsed;
+  const autoOut = new Date(checkinTime.getTime() + TWELVE_HRS);
+  return {
+    hoursOnSite: (elapsed / 3600000).toFixed(1),
+    autoCheckoutTime: autoOut.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}),
+    hoursLeft: Math.floor(remaining / 3600000)
+  };
 }
 
 function getLastActiveTask(b) {
@@ -1980,10 +1999,13 @@ function getBlockStatus(b) {
     const crew = checkin.crew || 1;
     const task = getLastActiveTask(b);
     const crewLabel = crew + (lang==='es' ? ' trabajador' + (crew>1?'es':'') : ' worker' + (crew>1?'s':''));
-    const taskShort = task ? ' — ' + (task.length > 14 ? task.substring(0,12)+'..' : task) : '';
+    const taskShort = task ? ' — ' + (task.length > 12 ? task.substring(0,10)+'..' : task) : '';
+    // Calculate hours on site
+    const elapsed = (new Date() - new Date(checkin.time)) / 3600000;
+    const hoursLabel = elapsed < 1 ? ' — <1hr' : ' — ' + elapsed.toFixed(1) + 'hrs';
     return {
       cls: 'status-orange',
-      label: crewLabel + taskShort,
+      label: crewLabel + taskShort + hoursLabel,
       icon: '&#128119;',
       priority: 4,
       crew: crew,
@@ -2099,10 +2121,15 @@ function renderNotFound() {
     const varShort = variety.length > 18 ? variety.substring(0,16)+'...' : variety;
     const checkinToday = getTodayCheckin(b);
     const checkinBadge = checkinToday
-      ? `<div style="font-size:10px;color:#9A3412;font-weight:600;margin-top:3px">
-           &#128205; ${checkinToday.crew||1} ${lang==='es'?'en sitio':'on site'}
-           ${checkinToday.foreman ? ' — ' + checkinToday.foreman : ''}
-         </div>`
+      ? (function(){
+          const elapsedHrs = ((new Date() - new Date(checkinToday.time)) / 3600000);
+          const hrsStr = elapsedHrs < 1 ? '<1hr' : elapsedHrs.toFixed(1)+'hrs';
+          return '<div style="font-size:10px;color:#9A3412;font-weight:600;margin-top:3px">' +
+            '&#128205; ' + (checkinToday.crew||1) + ' ' + (lang==='es'?'en sitio':'on site') +
+            (checkinToday.foreman ? ' — ' + checkinToday.foreman : '') +
+            ' (' + hrsStr + ')' +
+          '</div>';
+        })()
       : '';
     return `<div class="block-list-item ${status.cls}" onclick="window.location.hash='${id}'">
       <div class="bli-status-dot"></div>
@@ -2583,6 +2610,50 @@ function toast(msg) {
 
 async function saveCheckin_cloud(blockId, data) {
   await saveCheckin(blockId, data);
+}
+
+async function doCheckout(blockId, checkin) {
+  const block = BLOCKS[blockId];
+  if (!block) return;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const elapsed = ((now - new Date(checkin.time)) / 3600000).toFixed(1);
+
+  // Mark as checked out locally
+  checkin.checkout = now.toISOString();
+
+  // Add to activity log
+  const entry = now.toLocaleDateString() + ' ' + timeStr +
+    ' - CHECK-OUT: ' + (checkin.crew||1) + ' worker' + ((checkin.crew||1)>1?'s':'') +
+    (checkin.foreman ? ' - ' + checkin.foreman : '') +
+    ' | ' + elapsed + ' hrs on site';
+  block.assignedTasks.unshift(entry);
+
+  // Save to Supabase
+  if (cloudOk) {
+    try {
+      // Update checkin record with checkout time
+      await sb.from('block_checkins')
+        .update({checkout: now.toISOString()})
+        .eq('block_id', blockId)
+        .is('checkout', null)
+        .order('created_at', {ascending: false})
+        .limit(1);
+      // Log checkout activity
+      await saveActivity(blockId, {
+        activity_type: 'Checkout',
+        logged_by: checkin.foreman || '',
+        crew: checkin.crew || 1,
+        notes: elapsed + ' hrs on site'
+      });
+    } catch(e) { console.warn('Checkout save error:', e); }
+  }
+
+  render();
+  const msg = lang === 'es'
+    ? 'Salida confirmada a las ' + timeStr + '\n' + elapsed + ' horas en el sitio'
+    : 'Checkout confirmed at ' + timeStr + '\n' + elapsed + ' hours on site';
+  alert(msg);
 }
 
 function goHome() {
