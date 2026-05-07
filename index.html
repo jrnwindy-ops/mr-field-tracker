@@ -2460,7 +2460,7 @@ async function saveSprayAndTask(task) {
   saveTaskAndShowShare(task, block);
 }
 
-async async function saveTaskAndShowShare(task, block) {
+async function saveTaskAndShowShare(task, block) {
   const entry = 'TASK: ' + task;
   block.assignedTasks.push(entry);
   await saveTask(currentBlockId, task);
