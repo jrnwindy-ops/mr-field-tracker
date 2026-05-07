@@ -1641,6 +1641,11 @@ async function render() {
     const homeBtn = document.getElementById('home-btn');
     if (!block) {
       if (homeBtn) homeBtn.style.display = 'none';
+      if (cloudOk) {
+        try {
+          await loadAllBlockStatuses();
+        } catch(e) { console.warn(e); }
+      }
       renderNotFound();
       return;
     }
@@ -2021,6 +2026,64 @@ function getBlockStatus(b) {
   };
 }
 
+async function loadAllBlockStatuses() {
+  if (!cloudOk) return;
+  try {
+    // Load all recent activities and checkins in one query each
+    const today = new Date().toISOString().split('T')[0];
+
+    const [actsRes, checkinsRes, tasksRes] = await Promise.all([
+      sb.from('block_activities').select('*').order('created_at', {ascending: false}),
+      sb.from('block_checkins').select('*').gte('created_at', today).order('created_at', {ascending: false}),
+      sb.from('block_tasks').select('*').eq('status', 'pending').order('created_at', {ascending: false})
+    ]);
+
+    const acts = actsRes.data || [];
+    const checkins = checkinsRes.data || [];
+    const tasks = tasksRes.data || [];
+
+    // Apply to each block
+    Object.keys(BLOCKS).forEach(id => {
+      const block = BLOCKS[id];
+
+      // Latest spray
+      const spray = acts.find(a => a.block_id === id && a.activity_type === 'Spray' && a.spray_date);
+      if (spray) {
+        block.lastChemical = spray.chemical;
+        block.reiDays = spray.rei_days;
+        block.lastSprayDate = spray.spray_date;
+        block.lastSpray = new Date(spray.spray_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      }
+
+      // Latest irrigation
+      const irrig = acts.find(a => a.block_id === id && a.activity_type === 'Irrigation' && a.irrig_date);
+      if (irrig) {
+        block.lastIrrigationType = irrig.irrig_type;
+        block.lastIrrigationDate = irrig.irrig_date;
+        block.dryDays = irrig.dry_days;
+        block.lastIrrigation = new Date(irrig.irrig_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      }
+
+      // Today's checkins
+      block.checkins = checkins
+        .filter(c => c.block_id === id)
+        .map(c => ({time: c.created_at, crew: c.crew, foreman: c.foreman, lat: c.lat, lng: c.lng}));
+
+      // Active tasks
+      const blockTasks = tasks.filter(t => t.block_id === id);
+      const existingTasks = (block.assignedTasks || []).filter(t => !t.startsWith('TASK:'));
+      block.assignedTasks = [
+        ...blockTasks.map(t => 'TASK: ' + t.task),
+        ...existingTasks
+      ];
+    });
+
+    console.log('Block statuses loaded from cloud');
+  } catch(e) {
+    console.warn('loadAllBlockStatuses error:', e);
+  }
+}
+
 function renderNotFound() {
   // Sort by status priority (red first, then orange, yellow, green) then by id
   const sorted = Object.entries(BLOCKS).sort((a, b) => {
@@ -2065,8 +2128,9 @@ function renderNotFound() {
       <div style="font-family:'DM Serif Display',serif;font-size:22px;color:#fff;margin-bottom:4px">M&amp;R Field Blocks</div>
       <div style="font-size:13px;color:var(--g100)">${Object.keys(BLOCKS).length} ${lang==='es'?'bloques en':'blocks across'} 12 ${lang==='es'?'ranchos':'ranches'}</div>
     </div>
-    <div style="padding:14px 20px 6px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);margin-bottom:10px">${t('all_blocks')} &mdash; ${lang==='es'?'ordenado por estado':'sorted by status'}</div>
+    <div style="padding:14px 20px 6px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3)">${t('all_blocks')} &mdash; ${lang==='es'?'ordenado por estado':'sorted by status'}</div>
+      <div style="font-size:11px;color:var(--tx4)">${cloudOk ? '&#9729; Live' : '&#128190; Local'} &mdash; ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
     </div>
     ${legend}
     <div class="block-list">${listHtml}</div>
@@ -2525,6 +2589,15 @@ try {
   console.warn('Render error:', e);
   document.getElementById('block-content').innerHTML = '<div style="padding:40px 20px;text-align:center"><h2>Loading...</h2><p style="color:#666;margin-top:8px">Please refresh the page</p></div>';
 }
+
+// Auto-refresh home screen every 30 seconds to pick up new check-ins and tasks
+setInterval(function() {
+  const id = getBlockId();
+  if (!id || !BLOCKS[id]) {
+    // Only auto-refresh on home screen
+    render();
+  }
+}, 30000);
 </script>
 </body>
 </html>
