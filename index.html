@@ -1883,19 +1883,39 @@ function buildCheckinCard(id, b) {
   const card = document.createElement('div');
   card.style.cssText = 'background:#fff;border:3px solid #2D6A4F;border-radius:16px;padding:22px 20px;text-align:center;box-shadow:0 4px 20px rgba(27,67,50,.18)';
 
-  if (alreadyCheckedIn && b.checkins) {
-    const last = b.checkins[b.checkins.length-1];
+  if (alreadyCheckedIn) {
+    // Use activeCheckin directly for accuracy
+    const last = activeCheckin;
+    const meta = getCheckinMeta(last);
     const timeStr = new Date(last.time).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    const crew = last.crew || 1;
+    const foreman = last.foreman || '';
+
     card.style.borderColor = '#16A34A';
     card.style.background = '#F0FDF4';
-    card.innerHTML =
-      '<div style="font-size:48px;margin-bottom:8px">&#10003;</div>' +
-      '<div style="font-size:22px;font-weight:800;color:#15803D;margin-bottom:8px">Checked In!</div>' +
-      '<div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:4px">' +
-        (last.crew||1) + ' worker' + ((last.crew||1)>1?'s':'') +
-        (last.foreman ? ' &mdash; ' + last.foreman : '') +
+
+    // Info section
+    const info = document.createElement('div');
+    info.innerHTML =
+      '<div style="font-size:42px;margin-bottom:6px">&#10003;</div>' +
+      '<div style="font-size:20px;font-weight:800;color:#15803D;margin-bottom:6px">Checked In / Registrado</div>' +
+      '<div style="font-size:16px;font-weight:700;color:#166534;margin-bottom:4px">' +
+        crew + ' worker' + (crew>1?'s':'') +
+        (foreman ? ' &mdash; ' + foreman : '') +
       '</div>' +
-      '<div style="font-size:13px;color:#6B7280">' + timeStr + '</div>';
+      '<div style="font-size:13px;color:#6B7280;margin-bottom:18px">' +
+        'Since ' + timeStr + ' &mdash; ' + meta.hoursOnSite + ' hrs on site' +
+        '<br><span style="font-size:11px">Auto-checkout ' + meta.autoCheckoutTime + '</span>' +
+      '</div>';
+    card.appendChild(info);
+
+    // Checkout button
+    const coBtn = document.createElement('button');
+    coBtn.style.cssText = 'background:#991B1B;color:#fff;border:none;border-radius:12px;padding:18px 24px;font-size:18px;font-weight:800;cursor:pointer;font-family:inherit;width:100%';
+    coBtn.innerHTML = '&#9654; Check Out / Registrar Salida';
+    coBtn.onclick = function(){ doCheckout(id, last); };
+    card.appendChild(coBtn);
+
     sec.innerHTML = '';
     sec.appendChild(card);
     return;
