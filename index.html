@@ -7,9 +7,10 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1B4332">
 <title>M&R Field Block</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -1634,18 +1635,32 @@ function getBlockId() {
 }
 
 async function render() {
-  const id = getBlockId();
-  const block = BLOCKS[id];
-  const homeBtn = document.getElementById('home-btn');
-  if (!block) {
-    if (homeBtn) homeBtn.style.display = 'none';
-    renderNotFound();
-    return;
+  try {
+    const id = getBlockId();
+    const block = BLOCKS[id];
+    const homeBtn = document.getElementById('home-btn');
+    if (!block) {
+      if (homeBtn) homeBtn.style.display = 'none';
+      renderNotFound();
+      return;
+    }
+    if (homeBtn) homeBtn.style.display = 'block';
+    currentBlockId = id;
+    // Render immediately with local data first
+    renderBlock(block, id);
+    // Then enhance with cloud data if available
+    if (cloudOk) {
+      try {
+        await loadBlockData(id);
+        renderBlock(block, id);
+        buildCheckinCard(id, block);
+      } catch(e) {
+        console.warn('Cloud load error:', e);
+      }
+    }
+  } catch(e) {
+    console.warn('Render error:', e);
   }
-  if (homeBtn) homeBtn.style.display = 'block';
-  currentBlockId = id;
-  if (cloudOk) await loadBlockData(id);
-  renderBlock(block, id);
 }
 
 // ── BLOCK PAGE ────────────────────────────────────────────────────────────
@@ -2100,7 +2115,7 @@ function closeModal(){document.getElementById('modal-log').classList.remove('ope
 document.getElementById('modal-log').addEventListener('click',function(e){if(e.target===this)closeModal();});
 document.getElementById('modal-assign').addEventListener('click',function(e){if(e.target===this)closeAssignModal();});
 
-function submitLog() {
+async function submitLog() {
   const type = document.getElementById('log-type').value;
   const worker = document.getElementById('log-worker').value.trim();
   const notes = document.getElementById('log-notes').value.trim();
@@ -2222,7 +2237,7 @@ function shareWhatsApp(blockId, block) {
 }
 
 // ── CHECK-IN ──────────────────────────────────────────────────────────────
-function doCheckin(blockId) {
+async function doCheckin(blockId) {
   const block = BLOCKS[blockId];
   if (!block) return;
   const now = new Date();
@@ -2327,7 +2342,7 @@ function closeAssignModal() {
 function quickTask(text) {
   document.getElementById('assign-task-input').value = text;
 }
-function submitAssignTask() {
+async function submitAssignTask() {
   const task = document.getElementById('assign-task-input').value.trim();
   if (!task) { alert('Please enter a task description.'); return; }
   const block = BLOCKS[currentBlockId];
@@ -2418,7 +2433,7 @@ function showSprayPrompt(task, block) {
   `;
 }
 
-function saveIrrigAndTask(task) {
+async function saveIrrigAndTask(task) {
   const block = BLOCKS[currentBlockId];
   const irrigType = document.getElementById('prompt-irrig-type').value;
   const irrigDate = document.getElementById('prompt-irrig-date').value;
@@ -2431,7 +2446,7 @@ function saveIrrigAndTask(task) {
   saveTaskAndShowShare(task, block);
 }
 
-function saveSprayAndTask(task) {
+async function saveSprayAndTask(task) {
   const block = BLOCKS[currentBlockId];
   const chem = document.getElementById('prompt-chemical').value;
   const rei = parseInt(document.getElementById('prompt-rei').value) || 0;
@@ -2445,7 +2460,7 @@ function saveSprayAndTask(task) {
   saveTaskAndShowShare(task, block);
 }
 
-async function saveTaskAndShowShare(task, block) {
+async async function saveTaskAndShowShare(task, block) {
   const entry = 'TASK: ' + task;
   block.assignedTasks.push(entry);
   await saveTask(currentBlockId, task);
@@ -2497,8 +2512,19 @@ function goHome() {
 
 // ── BOOT ──────────────────────────────────────────────────────────────────
 window.addEventListener('hashchange', render);
-initSupabase();
-render();
+try {
+  initSupabase();
+} catch(e) {
+  console.warn('Supabase init error:', e);
+  cloudOk = false;
+}
+// Always render regardless of Supabase status
+try {
+  render();
+} catch(e) {
+  console.warn('Render error:', e);
+  document.getElementById('block-content').innerHTML = '<div style="padding:40px 20px;text-align:center"><h2>Loading...</h2><p style="color:#666;margin-top:8px">Please refresh the page</p></div>';
+}
 </script>
 </body>
 </html>
