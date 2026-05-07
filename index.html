@@ -9,6 +9,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1B4332">
 <title>M&R Field Block</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -1344,6 +1345,107 @@ const BLOCKS = {
 };
 
 
+// ── SUPABASE ──────────────────────────────────────────────────────────────
+const SB_URL = 'https://nlfovnxjzyfircvpgsrz.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sZm92bnhqenlmaXJjdnBnc3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1ODI2MzMsImV4cCI6MjA5MzE1ODYzM30.fu5Hh-HSdVJhD_OkUBlEvPs8q1AW2c1iznsFcWZUc9Q';
+let sb = null;
+let cloudOk = false;
+
+function initSupabase() {
+  try {
+    if (window.supabase && window.supabase.createClient) {
+      sb = window.supabase.createClient(SB_URL, SB_KEY);
+      cloudOk = true;
+      console.log('Supabase connected');
+    }
+  } catch(e) {
+    console.warn('Supabase init failed:', e);
+    cloudOk = false;
+  }
+}
+
+async function loadBlockData(blockId) {
+  if (!cloudOk) return;
+  try {
+    const [actsRes, tasksRes, checkinsRes] = await Promise.all([
+      sb.from('block_activities').select('*').eq('block_id', blockId).order('created_at', {ascending: false}),
+      sb.from('block_tasks').select('*').eq('block_id', blockId).eq('status', 'pending').order('created_at', {ascending: false}),
+      sb.from('block_checkins').select('*').eq('block_id', blockId).order('created_at', {ascending: false})
+    ]);
+    const block = BLOCKS[blockId];
+    if (!block) return;
+
+    // Rebuild assignedTasks from DB
+    const tasks = tasksRes.data || [];
+    const acts = actsRes.data || [];
+    block.assignedTasks = [
+      ...tasks.map(t => 'TASK: ' + t.task),
+      ...acts.map(a => {
+        const d = new Date(a.created_at).toLocaleDateString();
+        const tm = new Date(a.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+        if (a.activity_type === 'Spray') {
+          return d + ' ' + tm + ' - Spray: ' + (a.chemical||'') + ' | REI: ' + (a.rei_days||0) + 'h' + (a.logged_by ? ' (' + a.logged_by + ')' : '');
+        }
+        if (a.activity_type === 'Irrigation') {
+          return d + ' ' + tm + ' - Irrigation: ' + (a.irrig_type||'') + ' | Dry in ' + (a.dry_days||3) + 'd' + (a.logged_by ? ' (' + a.logged_by + ')' : '');
+        }
+        return d + ' ' + tm + ' - ' + (a.activity_type||'Activity') + (a.logged_by ? ' (' + a.logged_by + ')' : '') + (a.notes ? ' - ' + a.notes : '');
+      })
+    ];
+
+    // Restore REI status from most recent spray
+    const lastSpray = acts.find(a => a.activity_type === 'Spray' && a.spray_date);
+    if (lastSpray) {
+      block.lastChemical = lastSpray.chemical;
+      block.reiDays = lastSpray.rei_days;
+      block.lastSprayDate = lastSpray.spray_date;
+      block.lastSpray = new Date(lastSpray.spray_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    }
+
+    // Restore irrigation status from most recent irrigation
+    const lastIrrig = acts.find(a => a.activity_type === 'Irrigation' && a.irrig_date);
+    if (lastIrrig) {
+      block.lastIrrigationType = lastIrrig.irrig_type;
+      block.lastIrrigationDate = lastIrrig.irrig_date;
+      block.dryDays = lastIrrig.dry_days;
+      block.lastIrrigation = new Date(lastIrrig.irrig_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    }
+
+    // Restore checkins
+    block.checkins = (checkinsRes.data || []).map(c => ({
+      time: c.created_at,
+      crew: c.crew,
+      foreman: c.foreman,
+      lat: c.lat,
+      lng: c.lng
+    }));
+
+  } catch(e) {
+    console.warn('loadBlockData error:', e);
+  }
+}
+
+async function saveActivity(blockId, data) {
+  if (!cloudOk) return;
+  try {
+    await sb.from('block_activities').insert({block_id: blockId, ...data});
+  } catch(e) { console.warn('saveActivity error:', e); }
+}
+
+async function saveTask(blockId, task) {
+  if (!cloudOk) return;
+  try {
+    await sb.from('block_tasks').insert({block_id: blockId, task: task, status: 'pending'});
+  } catch(e) { console.warn('saveTask error:', e); }
+}
+
+async function saveCheckin(blockId, data) {
+  if (!cloudOk) return;
+  try {
+    await sb.from('block_checkins').insert({block_id: blockId, ...data});
+  } catch(e) { console.warn('saveCheckin error:', e); }
+}
+
 // ── STATE ─────────────────────────────────────────────────────────────────
 let lang = 'en';
 let currentBlockId = null;
@@ -1531,7 +1633,7 @@ function getBlockId() {
   return hash || params.get('block') || '';
 }
 
-function render() {
+async function render() {
   const id = getBlockId();
   const block = BLOCKS[id];
   const homeBtn = document.getElementById('home-btn');
@@ -1542,6 +1644,7 @@ function render() {
   }
   if (homeBtn) homeBtn.style.display = 'block';
   currentBlockId = id;
+  if (cloudOk) await loadBlockData(id);
   renderBlock(block, id);
 }
 
@@ -2019,7 +2122,6 @@ function submitLog() {
     if (!chemName) {alert('Please enter a chemical name.');return;}
     if (!sprayDate) {alert('Please enter the spray date.');return;}
 
-    // Update block REI data
     block.lastChemical = chemName;
     block.reiDays = reiDays;
     block.lastSprayDate = sprayDate;
@@ -2032,6 +2134,10 @@ function submitLog() {
       (worker ? ' (' + worker + ')' : '') +
       (notes ? ' - ' + notes : '');
     block.assignedTasks.unshift(entry);
+    await saveActivity(currentBlockId, {
+      activity_type: 'Spray', logged_by: worker, chemical: chemName,
+      rei_days: reiDays, spray_date: sprayDate, notes: rate ? 'Rate: '+rate+(notes?' | '+notes:'') : notes
+    });
   } else if (type === 'Irrigation') {
     const irrigType = document.getElementById('log-irrig-type').value;
     const irrigDate = document.getElementById('log-irrig-date').value;
@@ -2141,6 +2247,7 @@ function doCheckin(blockId) {
       accuracy: accuracy
     };
     block.checkins.push(checkin);
+    saveCheckin_cloud(currentBlockId, {crew, foreman, lat, lng, accuracy});
     const entry = now.toLocaleDateString() + ' ' + timeStr +
       ' - CHECK-IN: ' + crew + ' worker' + (crew > 1 ? 's' : '') +
       (foreman ? ' - Foreman: ' + foreman : '') +
@@ -2338,9 +2445,10 @@ function saveSprayAndTask(task) {
   saveTaskAndShowShare(task, block);
 }
 
-function saveTaskAndShowShare(task, block) {
+async function saveTaskAndShowShare(task, block) {
   const entry = 'TASK: ' + task;
   block.assignedTasks.push(entry);
+  await saveTask(currentBlockId, task);
 
   // Switch modal to share confirmation view
   const modal = document.querySelector('#modal-assign .modal');
@@ -2377,6 +2485,10 @@ function toast(msg) {
   setTimeout(() => el.remove(), 2500);
 }
 
+async function saveCheckin_cloud(blockId, data) {
+  await saveCheckin(blockId, data);
+}
+
 function goHome() {
   window.location.hash = '';
   try { window.history.replaceState(null, '', window.location.pathname); } catch(e) {}
@@ -2385,6 +2497,7 @@ function goHome() {
 
 // ── BOOT ──────────────────────────────────────────────────────────────────
 window.addEventListener('hashchange', render);
+initSupabase();
 render();
 </script>
 </body>
