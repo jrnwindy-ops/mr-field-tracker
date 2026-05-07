@@ -1856,17 +1856,19 @@ function renderBlock(b, id) {
     </div>
   `;
 
-  // Inject check-in card via DOM (not innerHTML) to preserve all styles
+  // Always inject check-in/checkout card - shows checkout if active checkin exists
   buildCheckinCard(id, b);
 }
 
 function buildCheckinCard(id, b) {
   const isQRScan = new URLSearchParams(window.location.search).get('checkin') === '1';
-  if (!isQRScan) return;
+  const activeCheckin = getTodayCheckin(b);
 
-  const alreadyCheckedIn = b.checkins && b.checkins.some(c =>
-    new Date(c.time).toDateString() === new Date().toDateString()
-  );
+  // Always show checkout button if there is an active checkin
+  // Only show check-in form if arriving via QR scan
+  if (!isQRScan && !activeCheckin) return;
+
+  const alreadyCheckedIn = !!activeCheckin;
 
   // Find or create the checkin section
   let sec = document.querySelector('.checkin-section');
