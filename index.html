@@ -308,6 +308,12 @@ textarea.form-input{height:80px;resize:none}
 </div>
 </div>
 
+<!-- DAILY SUMMARY MODAL -->
+<div class="modal-bg" id="modal-daily-summary">
+<div class="modal" style="max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
+</div>
+</div>
+
 <div class="site-footer">
   <p>M&amp;R Farm Management, Inc. &nbsp;|&nbsp; Powered by AgCommand &nbsp;|&nbsp; Martinez Accounting Inc.</p>
 </div>
@@ -2179,7 +2185,10 @@ function renderNotFound() {
     </div>
     <div style="padding:14px 20px 6px;display:flex;align-items:center;justify-content:space-between">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3)">${t('all_blocks')} &mdash; ${lang==='es'?'ordenado por estado':'sorted by status'}</div>
-      <div style="font-size:11px;color:var(--tx4)">${cloudOk ? '&#9729; Live' : '&#128190; Local'} &mdash; ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:11px;color:var(--tx4)">${cloudOk ? '&#9729; Live' : '&#128190; Local'} &mdash; ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
+        <button onclick="showDailySummary()" style="background:var(--g900);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128202; Daily Report</button>
+      </div>
     </div>
     ${legend}
     <div class="block-list">${listHtml}</div>
@@ -2227,6 +2236,7 @@ function onChemicalChange() {
 function closeModal(){document.getElementById('modal-log').classList.remove('open');}
 document.getElementById('modal-log').addEventListener('click',function(e){if(e.target===this)closeModal();});
 document.getElementById('modal-assign').addEventListener('click',function(e){if(e.target===this)closeAssignModal();});
+document.getElementById('modal-daily-summary').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 
 async function submitLog() {
   const type = document.getElementById('log-type').value;
@@ -2657,17 +2667,179 @@ async function doCheckout(blockId, checkin) {
     } catch(e) { console.warn('Checkout save error:', e); }
   }
 
-  render();
+  // Go back to home screen so colors update immediately
   const msg = lang === 'es'
     ? 'Salida confirmada a las ' + timeStr + '\n' + elapsed + ' horas en el sitio'
     : 'Checkout confirmed at ' + timeStr + '\n' + elapsed + ' hours on site';
   alert(msg);
+  goHome();
 }
 
 function goHome() {
   window.location.hash = '';
   try { window.history.replaceState(null, '', window.location.pathname); } catch(e) {}
   render();
+}
+
+async function showDailySummary() {
+  const today = new Date();
+  const todayStr = today.toDateString();
+  const dateLabel = today.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+
+  // Collect all today's activities from all blocks
+  let allEvents = [];
+
+  if (cloudOk) {
+    try {
+      const todayISO = today.toISOString().split('T')[0];
+      const [actsRes, checkinsRes] = await Promise.all([
+        sb.from('block_activities').select('*').gte('created_at', todayISO).order('created_at', {ascending: true}),
+        sb.from('block_checkins').select('*').gte('created_at', todayISO).order('created_at', {ascending: true})
+      ]);
+
+      (actsRes.data||[]).forEach(a => {
+        const block = BLOCKS[a.block_id];
+        allEvents.push({
+          time: new Date(a.created_at),
+          type: a.activity_type,
+          blockId: a.block_id,
+          displayId: block ? block.displayId : a.block_id,
+          ranch: block ? block.ranch : '',
+          variety: block ? block.variety : '',
+          detail: a.chemical ? a.chemical + ' | REI: ' + a.rei_days + 'h'
+                : a.irrig_type ? a.irrig_type + ' | Dry in ' + a.dry_days + 'd'
+                : a.notes || '',
+          worker: a.logged_by || '',
+          crew: a.crew || null
+        });
+      });
+
+      (checkinsRes.data||[]).forEach(c => {
+        const block = BLOCKS[c.block_id];
+        const isOut = c.checkout;
+        allEvents.push({
+          time: new Date(c.created_at),
+          type: isOut ? 'Checkout' : 'Check-In',
+          blockId: c.block_id,
+          displayId: block ? block.displayId : c.block_id,
+          ranch: block ? block.ranch : '',
+          variety: block ? block.variety : '',
+          detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') + (c.foreman ? ' - ' + c.foreman : ''),
+          worker: c.foreman || '',
+          crew: c.crew || 1
+        });
+        if (c.checkout) {
+          allEvents.push({
+            time: new Date(c.checkout),
+            type: 'Checkout',
+            blockId: c.block_id,
+            displayId: block ? block.displayId : c.block_id,
+            ranch: block ? block.ranch : '',
+            variety: block ? block.variety : '',
+            detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') + (c.foreman ? ' - ' + c.foreman : ''),
+            worker: c.foreman || '',
+            crew: c.crew || 1
+          });
+        }
+      });
+    } catch(e) { console.warn('Summary load error:', e); }
+  } else {
+    // Fall back to local block data
+    Object.entries(BLOCKS).forEach(([id, b]) => {
+      (b.assignedTasks||[]).forEach(entry => {
+        if (entry.includes('CHECK-IN') || entry.includes('CHECK-OUT') ||
+            entry.includes('Spray') || entry.includes('Irrigation') ||
+            entry.includes('Checkout')) {
+          allEvents.push({
+            time: new Date(),
+            type: entry.includes('CHECK-IN') ? 'Check-In'
+                : entry.includes('CHECK-OUT') || entry.includes('Checkout') ? 'Checkout'
+                : entry.includes('Spray') ? 'Spray'
+                : 'Irrigation',
+            displayId: b.displayId,
+            ranch: b.ranch,
+            variety: b.variety,
+            detail: entry,
+            worker: '', crew: null
+          });
+        }
+      });
+    });
+  }
+
+  // Sort by time
+  allEvents.sort((a,b) => a.time - b.time);
+
+  // Count stats
+  const checkins = allEvents.filter(e => e.type === 'Check-In');
+  const checkouts = allEvents.filter(e => e.type === 'Checkout');
+  const sprays = allEvents.filter(e => e.type === 'Spray');
+  const irrigations = allEvents.filter(e => e.type === 'Irrigation');
+  const totalWorkers = checkins.reduce((sum, e) => sum + (e.crew||1), 0);
+  const blocksActive = [...new Set(allEvents.map(e => e.blockId))].length;
+
+  const typeColors = {
+    'Check-In': '#16A34A', 'Checkout': '#6B7280', 'Spray': '#991B1B',
+    'Irrigation': '#1D4ED8', 'Pruning': '#7C3AED', 'Fertilizer': '#D97706',
+    'Harvest': '#B45309', 'Repair': '#374151', 'Inspection': '#0369A1', 'Other': '#6B7280'
+  };
+  const typeIcons = {
+    'Check-In': '&#128205;', 'Checkout': '&#9654;', 'Spray': '&#128137;',
+    'Irrigation': '&#128167;', 'Pruning': '&#9985;', 'Fertilizer': '&#129501;',
+    'Harvest': '&#129362;', 'Repair': '&#128295;', 'Inspection': '&#128270;', 'Other': '&#128203;'
+  };
+
+  const eventsHtml = allEvents.length ? allEvents.map(e => {
+    const color = typeColors[e.type] || '#6B7280';
+    const icon = typeIcons[e.type] || '&#128203;';
+    const timeStr = e.time.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    return '<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #F3F4F6;align-items:flex-start">' +
+      '<div style="flex-shrink:0;margin-top:2px">' +
+        '<div style="width:32px;height:32px;border-radius:50%;background:' + color + '20;border:2px solid ' + color + ';display:flex;align-items:center;justify-content:center;font-size:14px">' + icon + '</div>' +
+      '</div>' +
+      '<div style="flex:1">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<span style="font-size:13px;font-weight:700;color:' + color + '">' + e.type + '</span>' +
+          '<span style="font-size:11px;color:#9CA3AF">' + timeStr + '</span>' +
+        '</div>' +
+        '<div style="font-size:13px;font-weight:600;color:#111827;margin-top:1px">' + (e.displayId||'') + ' &mdash; ' + (e.variety||'') + '</div>' +
+        '<div style="font-size:12px;color:#6B7280">' + (e.ranch||'') + (e.detail ? ' &mdash; ' + e.detail : '') + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('') : '<div style="text-align:center;padding:30px;color:#9CA3AF;font-size:14px">No activities recorded today yet</div>';
+
+  const modal = document.getElementById('modal-daily-summary');
+  modal.querySelector('.modal').innerHTML =
+    '<div class="modal-handle"></div>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">' +
+      '<div>' +
+        '<div style="font-size:18px;font-weight:800;color:#111827">Daily Report</div>' +
+        '<div style="font-size:12px;color:#6B7280">' + dateLabel + '</div>' +
+      '</div>' +
+      '<button onclick="document.getElementById('modal-daily-summary').classList.remove('open')" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9CA3AF">&#x2715;</button>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">' +
+      '<div style="background:#F0FDF4;border-radius:10px;padding:12px;text-align:center">' +
+        '<div style="font-size:22px;font-weight:800;color:#15803D">' + checkins.length + '</div>' +
+        '<div style="font-size:11px;color:#6B7280;font-weight:600">CREWS IN</div>' +
+      '</div>' +
+      '<div style="background:#F3F4F6;border-radius:10px;padding:12px;text-align:center">' +
+        '<div style="font-size:22px;font-weight:800;color:#374151">' + totalWorkers + '</div>' +
+        '<div style="font-size:11px;color:#6B7280;font-weight:600">TOTAL WORKERS</div>' +
+      '</div>' +
+      '<div style="background:#FEF2F2;border-radius:10px;padding:12px;text-align:center">' +
+        '<div style="font-size:22px;font-weight:800;color:#991B1B">' + sprays.length + '</div>' +
+        '<div style="font-size:11px;color:#6B7280;font-weight:600">SPRAYS</div>' +
+      '</div>' +
+      '<div style="background:#EFF6FF;border-radius:10px;padding:12px;text-align:center">' +
+        '<div style="font-size:22px;font-weight:800;color:#1D4ED8">' + irrigations.length + '</div>' +
+        '<div style="font-size:11px;color:#6B7280;font-weight:600">IRRIGATIONS</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9CA3AF;margin-bottom:8px">' + allEvents.length + ' activities across ' + blocksActive + ' blocks</div>' +
+    '<div style="overflow-y:auto;max-height:45vh">' + eventsHtml + '</div>';
+
+  modal.classList.add('open');
 }
 
 // ── BOOT ──────────────────────────────────────────────────────────────────
