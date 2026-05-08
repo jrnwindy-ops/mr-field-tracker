@@ -2139,9 +2139,14 @@ async function loadAllBlockStatuses() {
           foreman: c.foreman,
           lat: c.lat,
           lng: c.lng,
-          // Re-apply local checkout marks in case Supabase update was slow
           checkout: c.checkout || (CHECKED_OUT.has(normalizeTime(c.created_at)) ? new Date().toISOString() : null)
-        }));
+        }))
+        // Filter to only checkins within 12 hours and not checked out
+        .filter(c => {
+          if (c.checkout) return true; // keep checked-out ones for history
+          const elapsed = new Date() - new Date(c.time);
+          return elapsed >= 0 && elapsed < 12 * 60 * 60 * 1000;
+        });
 
       // Active tasks
       const blockTasks = tasks.filter(t => t.block_id === id);
@@ -2742,9 +2747,11 @@ async function showDailySummary() {
   if (cloudOk) {
     try {
       const todayISO = today.toISOString().split('T')[0];
+      // Use 24 hours ago to handle UTC date boundary issues
+      const since24h = new Date(today.getTime() - 24*60*60*1000).toISOString();
       const [actsRes, checkinsRes] = await Promise.all([
         sb.from('block_activities').select('*').gte('created_at', todayISO).order('created_at', {ascending: true}),
-        sb.from('block_checkins').select('*').gte('created_at', todayISO).order('created_at', {ascending: true})
+        sb.from('block_checkins').select('*').gte('created_at', since24h).order('created_at', {ascending: true})
       ]);
 
       (actsRes.data||[]).forEach(a => {
