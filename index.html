@@ -1425,7 +1425,8 @@ async function loadBlockData(blockId) {
       crew: c.crew,
       foreman: c.foreman,
       lat: c.lat,
-      lng: c.lng
+      lng: c.lng,
+      checkout: c.checkout || (CHECKED_OUT.has(normalizeTime(c.created_at)) ? new Date().toISOString() : null)
     }));
 
   } catch(e) {
