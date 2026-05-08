@@ -1973,13 +1973,24 @@ function buildCheckinCard(id, b) {
 }
 
 // ── NOT FOUND ─────────────────────────────────────────────────────────────
+// Track checkouts in memory — use normalized time keys to avoid format mismatches
+const CHECKED_OUT = new Set();
+
+function normalizeTime(t) {
+  if (!t) return '';
+  return new Date(t).toISOString().substring(0, 16); // "2026-05-07T23:05"
+}
+
 function getTodayCheckin(b) {
   if (!b.checkins || !b.checkins.length) return null;
   const now = new Date();
   const TWELVE_HRS = 12 * 60 * 60 * 1000;
   return b.checkins.filter(c => {
+    // Check in-memory checkout registry using normalized time
+    if (CHECKED_OUT.has(normalizeTime(c.time))) return false;
     if (c.checkout) return false;
     const checkinTime = new Date(c.time);
+    if (isNaN(checkinTime.getTime())) return false;
     const elapsed = now - checkinTime;
     return elapsed >= 0 && elapsed < TWELVE_HRS;
   }).sort((a,b) => new Date(b.time) - new Date(a.time))[0] || null;
@@ -2117,7 +2128,15 @@ async function loadAllBlockStatuses() {
       // Today's checkins
       block.checkins = checkins
         .filter(c => c.block_id === id)
-        .map(c => ({time: c.created_at, crew: c.crew, foreman: c.foreman, lat: c.lat, lng: c.lng}));
+        .map(c => ({
+          time: c.created_at,
+          crew: c.crew,
+          foreman: c.foreman,
+          lat: c.lat,
+          lng: c.lng,
+          // Re-apply local checkout marks in case Supabase update was slow
+          checkout: c.checkout || (CHECKED_OUT.has(normalizeTime(c.created_at)) ? new Date().toISOString() : null)
+        }));
 
       // Active tasks
       const blockTasks = tasks.filter(t => t.block_id === id);
@@ -2634,8 +2653,15 @@ async function doCheckout(blockId, checkin) {
   const block = BLOCKS[blockId];
   if (!block) return;
 
-  // Prevent double checkout
-  if (checkin.checkout) { alert('Already checked out.'); return; }
+  // Prevent double checkout - check registry first before anything else
+  const key = normalizeTime(checkin.time);
+  if (CHECKED_OUT.has(key) || checkin.checkout) {
+    goHome();
+    return;
+  }
+
+  // Register immediately before any async operations
+  CHECKED_OUT.add(key);
 
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
@@ -2761,29 +2787,88 @@ async function showDailySummary() {
         }
       });
     } catch(e) { console.warn('Summary load error:', e); }
-  } else {
-    // Fall back to local block data
-    Object.entries(BLOCKS).forEach(([id, b]) => {
-      (b.assignedTasks||[]).forEach(entry => {
-        if (entry.includes('CHECK-IN') || entry.includes('CHECK-OUT') ||
-            entry.includes('Spray') || entry.includes('Irrigation') ||
-            entry.includes('Checkout')) {
+  }
+
+  // Always supplement with local in-memory data for activities not yet in Supabase
+  const existingTimes = new Set(allEvents.map(e => e.time.toISOString().substring(0,16)));
+  Object.entries(BLOCKS).forEach(([id, b]) => {
+    (b.assignedTasks||[]).forEach(entry => {
+      // Parse entries like "5/7/2026 5:02 PM - CHECK-IN: 1 worker - Lionel"
+      const dateMatch = entry.match(/^(\d+\/\d+\/\d+)\s+(\d+:\d+\s*[AP]M)/i);
+      if (!dateMatch) return;
+      const entryTime = new Date(dateMatch[1] + ' ' + dateMatch[2]);
+      if (isNaN(entryTime.getTime())) return;
+      // Only today
+      if (entryTime.toDateString() !== today.toDateString()) return;
+      // Skip if already in allEvents (from Supabase)
+      const timeKey = entryTime.toISOString().substring(0,16);
+      if (existingTimes.has(timeKey)) return;
+
+      let type = 'Other';
+      if (entry.includes('CHECK-IN')) type = 'Check-In';
+      else if (entry.includes('CHECK-OUT') || entry.includes('Checkout')) type = 'Checkout';
+      else if (entry.includes('Spray')) type = 'Spray';
+      else if (entry.includes('Irrigation')) type = 'Irrigation';
+      else if (entry.includes('TASK:')) type = 'Task Assigned';
+      else return; // skip non-activity entries
+
+      // Extract detail after the type
+      const detailMatch = entry.match(/- (?:CHECK-IN|CHECK-OUT|Spray|Irrigation|Checkout|TASK)[:,]?\s*(.*)/i);
+      const detail = detailMatch ? detailMatch[1].trim() : '';
+
+      allEvents.push({
+        time: entryTime,
+        type,
+        blockId: id,
+        displayId: b.displayId,
+        ranch: b.ranch,
+        variety: b.variety,
+        detail,
+        worker: '',
+        crew: null
+      });
+      existingTimes.add(timeKey);
+    });
+
+    // Also check checkins array directly
+    (b.checkins||[]).forEach(c => {
+      const ct = new Date(c.time);
+      if (ct.toDateString() !== today.toDateString()) return;
+      const timeKey = ct.toISOString().substring(0,16);
+      if (existingTimes.has(timeKey)) return;
+      allEvents.push({
+        time: ct,
+        type: 'Check-In',
+        blockId: id,
+        displayId: b.displayId,
+        ranch: b.ranch,
+        variety: b.variety,
+        detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') + (c.foreman ? ' - ' + c.foreman : ''),
+        worker: c.foreman || '',
+        crew: c.crew || 1
+      });
+      existingTimes.add(timeKey);
+      if (c.checkout) {
+        const cout = new Date(c.checkout);
+        const coutKey = cout.toISOString().substring(0,16);
+        if (!existingTimes.has(coutKey)) {
+          const elapsed = ((cout - ct)/3600000).toFixed(1);
           allEvents.push({
-            time: new Date(),
-            type: entry.includes('CHECK-IN') ? 'Check-In'
-                : entry.includes('CHECK-OUT') || entry.includes('Checkout') ? 'Checkout'
-                : entry.includes('Spray') ? 'Spray'
-                : 'Irrigation',
+            time: cout,
+            type: 'Checkout',
+            blockId: id,
             displayId: b.displayId,
             ranch: b.ranch,
             variety: b.variety,
-            detail: entry,
-            worker: '', crew: null
+            detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') + ' | ' + elapsed + ' hrs',
+            worker: c.foreman || '',
+            crew: c.crew || 1
           });
+          existingTimes.add(coutKey);
         }
-      });
+      }
     });
-  }
+  });
 
   // Sort by time
   allEvents.sort((a,b) => a.time - b.time);
