@@ -2630,7 +2630,7 @@ async function doCheckout(blockId, checkin) {
   if (activeTasks.length > 0) {
     showCheckoutTaskModal(blockId, checkin, activeTasks);
   } else {
-    await confirmCheckout(blockId, checkin, []);
+    await confirmCheckout(blockId, checkin, [], '');
   }
 }
 
@@ -2660,7 +2660,12 @@ function showCheckoutTaskModal(blockId, checkin, tasks) {
       (checkin.foreman ? ' — ' + checkin.foreman : '') + ' · ' + elapsed + ' hrs on site</div>' +
     '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:8px">Which tasks were completed?</div>' +
     '<div id="checkout-task-list">' + taskItems + '</div>' +
-    '<div style="font-size:11px;color:#9CA3AF;margin:10px 0 16px">Checked tasks will be marked complete and removed from the block.</div>' +
+    '<div style="font-size:11px;color:#9CA3AF;margin:10px 0 12px">Checked tasks will be marked complete and removed from the block.</div>' +
+    '<div style="margin-bottom:14px">' +
+      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Notes / Notas <span style="font-weight:400;text-transform:none">(optional)</span></div>' +
+      '<textarea id="checkout-notes" placeholder="e.g. Completed rows 1-10 only, noticed irrigation leak on east side..." ' +
+        'style="width:100%;background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;color:#111827;resize:none;height:72px;outline:none;box-sizing:border-box"></textarea>' +
+    '</div>' +
     '<div style="display:flex;gap:8px">' +
       '<button onclick="closeCheckoutModal()" ' +
         'style="flex:1;background:#F3F4F6;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;color:#374151">Cancel</button>' +
@@ -2674,16 +2679,17 @@ async function submitCheckoutTasks() {
   const blockId = _checkoutBlockId;
   const checkin = _checkoutCheckin;
   const checkboxes = document.querySelectorAll('#checkout-task-list input[type=checkbox]');
+  const notes = (document.getElementById('checkout-notes') || {}).value || '';
   const block = BLOCKS[blockId];
   if (!block) return;
   const activeTasks = (block.assignedTasks || []).filter(t => t.startsWith('TASK:'));
   const completedTasks = [];
   checkboxes.forEach((cb, i) => { if (cb.checked && activeTasks[i]) completedTasks.push(activeTasks[i]); });
   document.getElementById('modal-checkout-tasks').classList.remove('open');
-  await confirmCheckout(blockId, checkin, completedTasks);
+  await confirmCheckout(blockId, checkin, completedTasks, notes);
 }
 
-async function confirmCheckout(blockId, checkin, completedTasks) {
+async function confirmCheckout(blockId, checkin, completedTasks, notes) {
   const block = BLOCKS[blockId];
   if (!block) return;
   const key = normalizeTime(checkin.time);
@@ -2703,10 +2709,12 @@ async function confirmCheckout(blockId, checkin, completedTasks) {
     return !completedSet.has(t.trim());
   });
   // Add checkout log entry
+  notes = notes || '';
   const entry = now.toLocaleDateString() + ' ' + timeStr +
     ' - CHECK-OUT: ' + (checkin.crew||1) + ' worker' + ((checkin.crew||1)>1?'s':'') +
     (checkin.foreman ? ' - ' + checkin.foreman : '') + ' | ' + elapsed + ' hrs' +
-    (completedTasks.length ? ' | Done: ' + completedTasks.map(t=>t.replace('TASK:','').trim()).join(', ') : '');
+    (completedTasks.length ? ' | Done: ' + completedTasks.map(t=>t.replace('TASK:','').trim()).join(', ') : '') +
+    (notes ? ' | Notes: ' + notes : '');
   block.assignedTasks.unshift(entry);
   // Save to Supabase
   if (cloudOk) {
@@ -2725,7 +2733,9 @@ async function confirmCheckout(blockId, checkin, completedTasks) {
       await saveActivity(blockId, {
         activity_type: 'Checkout', logged_by: checkin.foreman||'',
         crew: checkin.crew||1,
-        notes: elapsed + ' hrs' + (completedTasks.length ? ' | ' + completedTasks.length + ' task(s) completed' : '')
+        notes: elapsed + ' hrs' +
+          (completedTasks.length ? ' | ' + completedTasks.length + ' task(s) completed' : '') +
+          (notes ? ' | ' + notes : '')
       });
     } catch(e) { console.warn('Checkout error:', e); }
   }
@@ -2739,13 +2749,15 @@ async function showActivityTabs() {
 
   // Activity types to show as tabs
   const ACTIVITY_TYPES = [
-    {key:'all',     label:'All',       icon:'&#128085;', color:'#374151'},
-    {key:'Spray',   label:'Spray',     icon:'&#128137;', color:'#991B1B'},
-    {key:'Irrigation',label:'Irrigation',icon:'&#128167;',color:'#1D4ED8'},
-    {key:'Harvest', label:'Harvest',   icon:'&#129362;', color:'#B45309'},
-    {key:'Pruning', label:'Pruning',   icon:'&#9985;',   color:'#7C3AED'},
-    {key:'Fertilizer',label:'Fertilizer',icon:'&#129501;',color:'#D97706'},
-    {key:'Check-In',label:'Check-Ins', icon:'&#128205;', color:'#16A34A'},
+    {key:'all',           label:'All',          icon:'&#128085;', color:'#374151'},
+    {key:'Task Assigned', label:'Tasks',         icon:'&#128203;', color:'#D97706'},
+    {key:'Spray',         label:'Spray',         icon:'&#128137;', color:'#991B1B'},
+    {key:'Irrigation',    label:'Irrigation',    icon:'&#128167;', color:'#1D4ED8'},
+    {key:'Harvest',       label:'Harvest',       icon:'&#129362;', color:'#B45309'},
+    {key:'Pruning',       label:'Pruning',       icon:'&#9985;',   color:'#7C3AED'},
+    {key:'Fertilizer',    label:'Fertilizer',    icon:'&#129501;', color:'#6B7280'},
+    {key:'Check-In',      label:'Check-Ins',     icon:'&#128205;', color:'#16A34A'},
+    {key:'Checkout',      label:'Checkouts',     icon:'&#9654;',   color:'#6B7280'},
   ];
 
   let allActivities = [];
@@ -2755,53 +2767,114 @@ async function showActivityTabs() {
   if (cloudOk) {
     try {
       const since30 = new Date(Date.now() - 30*24*60*60*1000).toISOString();
-      const [actsRes, checkinsRes] = await Promise.all([
+      const [actsRes, checkinsRes, tasksRes] = await Promise.all([
         sb.from('block_activities').select('*').gte('created_at', since30).order('created_at', {ascending: false}),
-        sb.from('block_checkins').select('*').gte('created_at', since30).order('created_at', {ascending: false})
+        sb.from('block_checkins').select('*').gte('created_at', since30).order('created_at', {ascending: false}),
+        sb.from('block_tasks').select('*').gte('created_at', since30).order('created_at', {ascending: false})
       ]);
+
+      // Activities (spray, irrigation, checkout, etc.)
       (actsRes.data||[]).forEach(a => {
         const b = BLOCKS[a.block_id];
+        if (!b) return;
         allActivities.push({
-          type: a.activity_type, blockId: a.block_id,
-          displayId: b ? b.displayId : a.block_id,
-          ranch: b ? b.ranch : '', variety: b ? b.variety : '',
-          acreage: b ? b.acreage : '',
-          detail: a.chemical ? a.chemical + ' · REI: ' + a.rei_days + 'h'
-                : a.irrig_type ? a.irrig_type + ' · Dry in ' + a.dry_days + 'd'
+          type: a.activity_type || 'Other',
+          blockId: a.block_id,
+          displayId: b.displayId,
+          ranch: b.ranch, variety: b.variety, acreage: b.acreage,
+          detail: a.chemical ? a.chemical + ' · REI: ' + (a.rei_days||0) + 'h'
+                : a.irrig_type ? a.irrig_type + (a.dry_days ? ' · Dry in ' + a.dry_days + 'd' : '')
                 : a.notes || '',
           worker: a.logged_by || '',
           time: new Date(a.created_at)
         });
       });
+
+      // Check-ins and checkouts
       (checkinsRes.data||[]).forEach(c => {
         const b = BLOCKS[c.block_id];
+        if (!b) return;
+        const elapsed = c.checkout
+          ? ((new Date(c.checkout) - new Date(c.created_at))/3600000).toFixed(1) + ' hrs'
+          : 'Active';
         allActivities.push({
           type: 'Check-In', blockId: c.block_id,
-          displayId: b ? b.displayId : c.block_id,
-          ranch: b ? b.ranch : '', variety: b ? b.variety : '',
-          acreage: b ? b.acreage : '',
-          detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') + (c.foreman ? ' · ' + c.foreman : '') + (c.checkout ? ' · Checked out' : ' · Active'),
+          displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
+          detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') +
+            (c.foreman ? ' · ' + c.foreman : '') + ' · ' + elapsed,
           worker: c.foreman || '',
           time: new Date(c.created_at)
         });
+        if (c.checkout) {
+          allActivities.push({
+            type: 'Checkout', blockId: c.block_id,
+            displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
+            detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') +
+              (c.foreman ? ' · ' + c.foreman : '') + ' · ' + elapsed,
+            worker: c.foreman || '',
+            time: new Date(c.checkout)
+          });
+        }
       });
+
+      // Assigned tasks
+      (tasksRes.data||[]).forEach(t => {
+        const b = BLOCKS[t.block_id];
+        if (!b) return;
+        allActivities.push({
+          type: t.status === 'completed' ? 'Task Completed' : 'Task Assigned',
+          blockId: t.block_id,
+          displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
+          detail: t.task + (t.status === 'completed' ? ' · Completed' : ' · Pending'),
+          worker: '',
+          time: new Date(t.status === 'completed' && t.completed_at ? t.completed_at : t.created_at)
+        });
+      });
+
     } catch(e) { console.warn('Activity tabs error:', e); }
   }
 
+  // Supplement with local in-memory data not yet in Supabase
+  const existingKeys = new Set(allActivities.map(a => normalizeTime(a.time.toISOString()) + a.blockId + a.type));
+  Object.entries(BLOCKS).forEach(([id, b]) => {
+    (b.assignedTasks||[]).forEach(entry => {
+      if (!entry.startsWith('TASK:')) return;
+      const label = entry.replace('TASK:','').trim();
+      const key = 'local-' + id + label;
+      if (existingKeys.has(key)) return;
+      allActivities.push({
+        type: 'Task Assigned', blockId: id,
+        displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
+        detail: label + ' · Pending',
+        worker: '', time: new Date()
+      });
+    });
+  });
+
   function renderTabContent(tab) {
-    const filtered = tab === 'all' ? allActivities : allActivities.filter(a => a.type === tab);
+    const filtered = tab === 'all' ? allActivities
+      : tab === 'Task Assigned' ? allActivities.filter(a => a.type === 'Task Assigned' || a.type === 'Task Completed')
+      : allActivities.filter(a => a.type === tab);
     if (!filtered.length) {
       return '<div style="text-align:center;padding:40px 20px;color:#9CA3AF">No ' + tab + ' activities in last 30 days</div>';
     }
-    const typeColors = {'Spray':'#991B1B','Irrigation':'#1D4ED8','Harvest':'#B45309',
-      'Pruning':'#7C3AED','Fertilizer':'#D97706','Check-In':'#16A34A','Checkout':'#6B7280','Other':'#374151'};
+    const typeColors = {
+      'Spray':'#991B1B','Irrigation':'#1D4ED8','Harvest':'#B45309','Pruning':'#7C3AED',
+      'Fertilizer':'#6B7280','Check-In':'#16A34A','Checkout':'#6B7280',
+      'Task Assigned':'#D97706','Task Completed':'#16A34A','Other':'#374151'
+    };
+    const typeIcons2 = {
+      'Spray':'&#128137;','Irrigation':'&#128167;','Harvest':'&#129362;','Pruning':'&#9985;',
+      'Fertilizer':'&#129501;','Check-In':'&#128205;','Checkout':'&#9654;',
+      'Task Assigned':'&#128203;','Task Completed':'&#10003;','Other':'&#128085;'
+    };
     return filtered.map(a => {
       const color = typeColors[a.type] || '#374151';
       const timeStr = a.time.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' +
         a.time.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
       return '<div data-blockid="' + a.blockId + '" onclick="_openBlock(this.dataset.blockid)" style="display:flex;gap:12px;padding:11px 0;border-bottom:1px solid #F3F4F6;cursor:pointer;align-items:flex-start">' +
         '<div style="flex-shrink:0;width:34px;height:34px;border-radius:50%;background:' + color + '20;border:2px solid ' + color + ';display:flex;align-items:center;justify-content:center;font-size:14px;margin-top:2px">' +
-          (a.type==='Spray'?'&#128137;':a.type==='Irrigation'?'&#128167;':a.type==='Harvest'?'&#129362;':a.type==='Pruning'?'&#9985;':a.type==='Fertilizer'?'&#129501;':'&#128205;') +
+          (typeIcons2[a.type] || '&#128085;') +
         '</div>' +
         '<div style="flex:1;min-width:0">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">' +
