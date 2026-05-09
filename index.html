@@ -309,6 +309,12 @@ textarea.form-input{height:80px;resize:none}
 </div>
 </div>
 
+<!-- CHECKOUT TASKS MODAL -->
+<div class="modal-bg" id="modal-checkout-tasks">
+<div class="modal">
+</div>
+</div>
+
 <!-- DAILY SUMMARY MODAL -->
 <div class="modal-bg" id="modal-daily-summary">
 <div class="modal" style="max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
@@ -2217,7 +2223,7 @@ function renderNotFound() {
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3)">${t('all_blocks')} &mdash; ${lang==='es'?'ordenado por estado':'sorted by status'}</div>
       <div style="display:flex;align-items:center;gap:10px">
         <div style="font-size:11px;color:var(--tx4)">${cloudOk ? '&#9729; Live' : '&#128190; Local'} &mdash; ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
-        <button onclick="showDailySummary()" style="background:var(--g900);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128202; Daily Report</button>
+        <button onclick="showDailySummary(0)" style="background:var(--g900);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128202; Daily Report</button>
       </div>
     </div>
     ${legend}
@@ -2267,6 +2273,7 @@ function closeModal(){document.getElementById('modal-log').classList.remove('ope
 document.getElementById('modal-log').addEventListener('click',function(e){if(e.target===this)closeModal();});
 document.getElementById('modal-assign').addEventListener('click',function(e){if(e.target===this)closeAssignModal();});
 document.getElementById('modal-daily-summary').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('modal-checkout-tasks').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 
 async function submitLog() {
   const type = document.getElementById('log-type').value;
@@ -2663,71 +2670,118 @@ async function saveCheckin_cloud(blockId, data) {
 async function doCheckout(blockId, checkin) {
   const block = BLOCKS[blockId];
   if (!block) return;
-
-  // Prevent double checkout - check registry first before anything else
   const key = normalizeTime(checkin.time);
-  if (CHECKED_OUT.has(key) || checkin.checkout) {
-    goHome();
-    return;
+  if (CHECKED_OUT.has(key) || checkin.checkout) { goHome(); return; }
+  const activeTasks = (block.assignedTasks || []).filter(t => t.startsWith('TASK:'));
+  if (activeTasks.length > 0) {
+    showCheckoutTaskModal(blockId, checkin, activeTasks);
+  } else {
+    await confirmCheckout(blockId, checkin, []);
   }
+}
 
-  // Register immediately before any async operations
+// Store checkout context for modal submission
+let _checkoutBlockId = null;
+let _checkoutCheckin = null;
+
+function showCheckoutTaskModal(blockId, checkin, tasks) {
+  _checkoutBlockId = blockId;
+  _checkoutCheckin = checkin;
+  const modal = document.getElementById('modal-checkout-tasks');
+  const inner = modal.querySelector('.modal');
+  const elapsed = ((new Date() - new Date(checkin.time)) / 3600000).toFixed(1);
+  const taskItems = tasks.map((t, i) => {
+    const label = t.replace('TASK:', '').trim();
+    return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #F3F4F6;cursor:pointer">' +
+      '<input type="checkbox" value="' + i + '" checked ' +
+        'style="width:20px;height:20px;flex-shrink:0;margin-top:2px;accent-color:#1B4332;cursor:pointer">' +
+      '<span style="font-size:14px;color:#111827;line-height:1.4">' + label + '</span>' +
+      '</label>';
+  }).join('');
+  inner.innerHTML =
+    '<div class="modal-handle"></div>' +
+    '<div style="font-size:20px;font-weight:800;color:#111827;margin-bottom:4px">Check Out / Registrar Salida</div>' +
+    '<div style="font-size:13px;color:#6B7280;margin-bottom:16px">' +
+      (checkin.crew||1) + ' worker' + ((checkin.crew||1)>1?'s':'') +
+      (checkin.foreman ? ' — ' + checkin.foreman : '') + ' · ' + elapsed + ' hrs on site</div>' +
+    '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:8px">Which tasks were completed?</div>' +
+    '<div id="checkout-task-list">' + taskItems + '</div>' +
+    '<div style="font-size:11px;color:#9CA3AF;margin:10px 0 16px">Checked tasks will be marked complete and removed from the block.</div>' +
+    '<div style="display:flex;gap:8px">' +
+      '<button onclick="document.getElementById('modal-checkout-tasks').classList.remove('open')" ' +
+        'style="flex:1;background:#F3F4F6;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;color:#374151">Cancel</button>' +
+      '<button onclick="submitCheckoutTasks()" style="flex:2;background:#991B1B;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;color:#fff">Confirm Checkout</button>' +
+        'style="flex:2;background:#991B1B;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;color:#fff">Confirm Checkout</button>' +
+    '</div>';
+  modal.classList.add('open');
+}
+
+async function submitCheckoutTasks() {
+  const blockId = _checkoutBlockId;
+  const checkin = _checkoutCheckin;
+  const checkboxes = document.querySelectorAll('#checkout-task-list input[type=checkbox]');
+  const block = BLOCKS[blockId];
+  if (!block) return;
+  const activeTasks = (block.assignedTasks || []).filter(t => t.startsWith('TASK:'));
+  const completedTasks = [];
+  checkboxes.forEach((cb, i) => { if (cb.checked && activeTasks[i]) completedTasks.push(activeTasks[i]); });
+  document.getElementById('modal-checkout-tasks').classList.remove('open');
+  await confirmCheckout(blockId, checkin, completedTasks);
+}
+
+async function confirmCheckout(blockId, checkin, completedTasks) {
+  const block = BLOCKS[blockId];
+  if (!block) return;
+  const key = normalizeTime(checkin.time);
   CHECKED_OUT.add(key);
-
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   const elapsed = ((now - new Date(checkin.time)) / 3600000).toFixed(1);
-
-  // Mark as checked out locally on the checkin object AND in the block.checkins array
+  // Mark checkin checked out locally
   checkin.checkout = now.toISOString();
   if (block.checkins) {
-    block.checkins.forEach(c => {
-      if (c.time === checkin.time && !c.checkout) {
-        c.checkout = now.toISOString();
-      }
-    });
+    block.checkins.forEach(c => { if (normalizeTime(c.time) === key) c.checkout = now.toISOString(); });
   }
-
-  // Log to activity list
+  // Remove completed tasks from active list
+  const completedSet = new Set(completedTasks.map(t => t.trim()));
+  block.assignedTasks = (block.assignedTasks || []).filter(t => {
+    if (!t.startsWith('TASK:')) return true;
+    return !completedSet.has(t.trim());
+  });
+  // Add checkout log entry
   const entry = now.toLocaleDateString() + ' ' + timeStr +
     ' - CHECK-OUT: ' + (checkin.crew||1) + ' worker' + ((checkin.crew||1)>1?'s':'') +
-    (checkin.foreman ? ' - ' + checkin.foreman : '') +
-    ' | ' + elapsed + ' hrs on site';
+    (checkin.foreman ? ' - ' + checkin.foreman : '') + ' | ' + elapsed + ' hrs' +
+    (completedTasks.length ? ' | Done: ' + completedTasks.map(t=>t.replace('TASK:','').trim()).join(', ') : '');
   block.assignedTasks.unshift(entry);
-
   // Save to Supabase
   if (cloudOk) {
     try {
-      // Find the checkin record by block_id and null checkout and update it
-      const {data: rows} = await sb.from('block_checkins')
-        .select('id')
-        .eq('block_id', blockId)
-        .is('checkout', null)
-        .order('created_at', {ascending: false})
-        .limit(1);
-
+      const {data: rows} = await sb.from('block_checkins').select('id')
+        .eq('block_id', blockId).is('checkout', null)
+        .order('created_at', {ascending: false}).limit(1);
       if (rows && rows.length > 0) {
-        await sb.from('block_checkins')
-          .update({checkout: now.toISOString()})
-          .eq('id', rows[0].id);
+        await sb.from('block_checkins').update({checkout: now.toISOString()}).eq('id', rows[0].id);
       }
-
+      for (const task of completedTasks) {
+        const label = task.replace('TASK:', '').trim();
+        await sb.from('block_tasks').update({status:'completed',completed_at:now.toISOString()})
+          .eq('block_id', blockId).eq('task', label).eq('status','pending');
+      }
       await saveActivity(blockId, {
-        activity_type: 'Checkout',
-        logged_by: checkin.foreman || '',
-        crew: checkin.crew || 1,
-        notes: elapsed + ' hrs on site'
+        activity_type: 'Checkout', logged_by: checkin.foreman||'',
+        crew: checkin.crew||1,
+        notes: elapsed + ' hrs' + (completedTasks.length ? ' | ' + completedTasks.length + ' task(s) completed' : '')
       });
-    } catch(e) { console.warn('Checkout save error:', e); }
+    } catch(e) { console.warn('Checkout error:', e); }
   }
-
-  const msg = lang === 'es'
-    ? 'Salida confirmada a las ' + timeStr + '\n' + elapsed + ' horas en el sitio'
-    : 'Checkout confirmed at ' + timeStr + '\n' + elapsed + ' hours on site';
-  alert(msg);
-
-  // Return to home screen — block will now show correct color
   goHome();
+}
+
+
+function refreshDailyReport() {
+  const days = parseInt(document.getElementById('daily-date-range').value);
+  showDailySummary(days);
 }
 
 function goHome() {
@@ -2736,22 +2790,25 @@ function goHome() {
   render();
 }
 
-async function showDailySummary() {
+async function showDailySummary(daysBack) {
+  daysBack = daysBack || 0;
   const today = new Date();
+  const since = new Date(today.getTime() - daysBack * 24 * 60 * 60 * 1000);
+  since.setHours(0,0,0,0);
   const todayStr = today.toDateString();
-  const dateLabel = today.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  const dateLabel = daysBack === 0 ? today.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})
+    : daysBack === 1 ? 'Yesterday'
+    : 'Last ' + daysBack + ' days';
 
   // Collect all today's activities from all blocks
   let allEvents = [];
 
   if (cloudOk) {
     try {
-      const todayISO = today.toISOString().split('T')[0];
-      // Use 24 hours ago to handle UTC date boundary issues
-      const since24h = new Date(today.getTime() - 24*60*60*1000).toISOString();
+      const sinceISO = since.toISOString();
       const [actsRes, checkinsRes] = await Promise.all([
-        sb.from('block_activities').select('*').gte('created_at', todayISO).order('created_at', {ascending: true}),
-        sb.from('block_checkins').select('*').gte('created_at', since24h).order('created_at', {ascending: true})
+        sb.from('block_activities').select('*').gte('created_at', sinceISO).order('created_at', {ascending: true}),
+        sb.from('block_checkins').select('*').gte('created_at', sinceISO).order('created_at', {ascending: true})
       ]);
 
       (actsRes.data||[]).forEach(a => {
@@ -2812,7 +2869,7 @@ async function showDailySummary() {
       const entryTime = new Date(dateMatch[1] + ' ' + dateMatch[2]);
       if (isNaN(entryTime.getTime())) return;
       // Only today
-      if (entryTime.toDateString() !== today.toDateString()) return;
+      if (entryTime < since) return;
       // Skip if already in allEvents (from Supabase)
       const timeKey = entryTime.toISOString().substring(0,16);
       if (existingTimes.has(timeKey)) return;
@@ -2846,7 +2903,7 @@ async function showDailySummary() {
     // Also check checkins array directly
     (b.checkins||[]).forEach(c => {
       const ct = new Date(c.time);
-      if (ct.toDateString() !== today.toDateString()) return;
+      if (ct < since) return;
       const timeKey = ct.toISOString().substring(0,16);
       if (existingTimes.has(timeKey)) return;
       allEvents.push({
