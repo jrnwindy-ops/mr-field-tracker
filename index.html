@@ -2560,6 +2560,14 @@ async function saveIrrigAndTask(task) {
   block.lastIrrigationDate = irrigDate;
   block.dryDays = dryDays;
   block.lastIrrigation = new Date(irrigDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  // Save as block_activity so it shows in Irrigation tab
+  await saveActivity(currentBlockId, {
+    activity_type: 'Irrigation',
+    irrig_type: irrigType,
+    irrig_date: irrigDate,
+    dry_days: dryDays,
+    notes: task.replace('TASK:','').trim()
+  });
   saveTaskAndShowShare(task, block);
 }
 
@@ -2574,6 +2582,14 @@ async function saveSprayAndTask(task) {
   block.reiDays = rei;
   block.lastSprayDate = sprayDate;
   block.lastSpray = new Date(sprayDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  // Save as block_activity so it shows in Spray tab
+  await saveActivity(currentBlockId, {
+    activity_type: 'Spray',
+    chemical: chem,
+    rei_days: rei,
+    spray_date: sprayDate,
+    notes: task.replace('TASK:','').trim()
+  });
   saveTaskAndShowShare(task, block);
 }
 
@@ -2893,9 +2909,9 @@ async function showActivityTabs() {
       const count = t.key === 'all' ? allActivities.length : allActivities.filter(a => a.type === t.key).length;
       const isActive = t.key === currentTab;
       return '<button data-tab="' + t.key + '" onclick="_actTab(this.dataset.tab)" style="' +
-        'display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:20px;border:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;white-space:nowrap;' +
+        'display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:16px;border:none;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0;' +
         (isActive ? 'background:' + t.color + ';color:#fff;' : 'background:#F3F4F6;color:#374151;') +
-        '">' + t.icon + ' ' + t.label + ' <span style="opacity:.7">(' + count + ')</span></button>';
+        '">' + t.icon + ' ' + t.label + (count > 0 ? ' <span style="opacity:.7;font-size:10px">(' + count + ')</span>' : '') + '</button>';
     }).join('');
   }
 
@@ -2915,7 +2931,7 @@ window._actTab = function(tab) {
       '<div style="font-size:18px;font-weight:800;color:#111827">&#128085; Ranch Activities</div>' +
       '<button onclick="closeActivityModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9CA3AF">&#x2715;</button>' +
     '</div>' +
-    '<div id="act-tabs-bar" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;flex-shrink:0;scrollbar-width:none">' + buildTabs() + '</div>' +
+    '<div id="act-tabs-bar" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:8px;flex-shrink:0;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-right:4px">' + buildTabs() + '</div>' +
     '<div id="act-tabs-content" style="overflow-y:auto;flex:1">' + renderTabContent('all') + '</div>';
 
   modal.classList.add('open');
