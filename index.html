@@ -11,6 +11,8 @@
 <meta name="theme-color" content="#1B4332">
 <title>M&R Field Block</title>
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -130,6 +132,21 @@ textarea.form-input{height:80px;resize:none}
 .status-green .bli-id{color:var(--g800)}
 .status-green .bli-status-dot{background:var(--g400)}
 .status-green .bli-status-text{background:var(--g100);color:var(--g800)}
+
+/* MAP */
+#map-container{display:none;position:fixed;inset:0;z-index:50;flex-direction:column}
+#map-header{background:var(--g900);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#map-header h2{font-family:'DM Serif Display',serif;font-size:18px;color:#fff}
+#map-close-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 12px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+#map-el{flex:1;width:100%}
+#map-legend{background:var(--g900);padding:8px 16px;display:flex;gap:10px;flex-wrap:wrap;flex-shrink:0}
+.map-leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--g100);font-weight:600}
+.map-leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* VIEW TOGGLE */
+.view-toggle{display:flex;background:rgba(255,255,255,.12);border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.2)}
+.view-btn{background:none;border:none;padding:5px 10px;font-size:11px;font-weight:700;color:rgba(255,255,255,.7);cursor:pointer;font-family:inherit;transition:all .15s}
+.view-btn.active{background:var(--g600);color:#fff}
 
 /* FOOTER */
 .site-footer{background:var(--g900);padding:14px 20px;text-align:center}
@@ -325,6 +342,28 @@ textarea.form-input{height:80px;resize:none}
 <div class="modal-bg" id="modal-daily-summary">
 <div class="modal" style="max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
 </div>
+</div>
+
+<!-- MAP CONTAINER -->
+<div id="map-container">
+  <div id="map-header">
+    <h2>&#128205; Ranch Map</h2>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="view-toggle">
+        <button class="view-btn" onclick="showGrid()">&#9783; Grid</button>
+        <button class="view-btn active">&#128205; Map</button>
+      </div>
+      <button id="map-close-btn" onclick="showGrid()">&#x2715; Close</button>
+    </div>
+  </div>
+  <div id="map-el"></div>
+  <div id="map-legend">
+    <div class="map-leg-item"><div class="map-leg-dot" style="background:#EF4444"></div>REI Active</div>
+    <div class="map-leg-item"><div class="map-leg-dot" style="background:#F97316"></div>Crew On Site</div>
+    <div class="map-leg-item"><div class="map-leg-dot" style="background:#D97706"></div>Task Pending</div>
+    <div class="map-leg-item"><div class="map-leg-dot" style="background:#EAB308"></div>Field Wet</div>
+    <div class="map-leg-item"><div class="map-leg-dot" style="background:#22C55E"></div>Clear</div>
+  </div>
 </div>
 
 <div class="site-footer">
@@ -2260,11 +2299,12 @@ function renderNotFound() {
       <div style="font-family:'DM Serif Display',serif;font-size:22px;color:#fff;margin-bottom:4px">M&amp;R Field Blocks</div>
       <div style="font-size:13px;color:var(--g100)">${Object.keys(BLOCKS).length} ${lang==='es'?'bloques en':'blocks across'} 12 ${lang==='es'?'ranchos':'ranches'}</div>
     </div>
-    <div style="padding:14px 20px 6px;display:flex;align-items:center;justify-content:space-between">
+    <div style="padding:14px 20px 6px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3)">${t('all_blocks')} &mdash; ${lang==='es'?'ordenado por estado':'sorted by status'}</div>
-      <div style="display:flex;align-items:center;gap:10px">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <div style="font-size:11px;color:var(--tx4)">${cloudOk ? '&#9729; Live' : '&#128190; Local'} &mdash; ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
-        <button onclick="showDailySummary(0)" style="background:var(--g900);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:4px">&#128202; Daily Report</button>
+        <button onclick="showMapView()" style="background:var(--g400);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128205; Map</button>
+        <button onclick="showDailySummary(0)" style="background:var(--g900);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128202; Daily</button>
         <button onclick="showActivityTabs()" style="background:var(--g600);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128085; Activities</button>
       </div>
     </div>
@@ -2940,6 +2980,107 @@ window._actTab = function(tab) {
 function refreshDailyReport() {
   const days = parseInt(document.getElementById('daily-date-range').value);
   showDailySummary(days);
+}
+
+let _map = null;
+
+function getStatusColor(block) {
+  const s = getBlockStatus(block);
+  if (s.cls === 'status-red')    return '#EF4444';
+  if (s.cls === 'status-orange') return '#F97316';
+  if (s.cls === 'status-amber')  return '#D97706';
+  if (s.cls === 'status-yellow') return '#EAB308';
+  return '#22C55E';
+}
+
+function makePin(color) {
+  return L.divIcon({
+    className: '',
+    html: '<div style="width:16px;height:16px;border-radius:50%;background:' + color + ';border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)"></div>',
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+    popupAnchor: [0, -10]
+  });
+}
+
+function showMapView() {
+  document.getElementById('map-container').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  // Init map once
+  if (!_map) {
+    _map = L.map('map-el', {zoomControl: true}).setView([36.50, -119.26], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 18
+    }).addTo(_map);
+  } else {
+    _map.invalidateSize();
+  }
+
+  // Clear existing markers
+  _map.eachLayer(layer => {
+    if (layer instanceof L.Marker) _map.removeLayer(layer);
+  });
+
+  // Add a marker for each block
+  const bounds = [];
+  Object.entries(BLOCKS).forEach(([id, b]) => {
+    if (!b.lat || !b.lng) return;
+    const lat = parseFloat(b.lat);
+    const lng = parseFloat(b.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    const color = getStatusColor(b);
+    const status = getBlockStatus(b);
+    const tpa = calcTreesPerAcre(b.spacing);
+    const total = calcTotalTrees(b.spacing, b.acreage);
+    const marker = L.marker([lat, lng], {icon: makePin(color)});
+    marker.bindPopup(
+      '<div style="font-family:DM Sans,sans-serif;min-width:200px">' +
+        '<div style="background:#1B4332;color:#fff;padding:8px 10px;margin:-10px -10px 8px;border-radius:4px 4px 0 0">' +
+          '<div style="font-size:13px;font-weight:800">' + b.displayId + '</div>' +
+          '<div style="font-size:11px;opacity:.8">' + b.ranch + '</div>' +
+        '</div>' +
+        '<div style="font-size:13px;font-weight:600;color:#111827;margin-bottom:4px">' + b.variety + '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px">' +
+          '<div style="font-size:11px;color:#6B7280">Acreage: <strong style="color:#111827">' + b.acreage + ' ac</strong></div>' +
+          '<div style="font-size:11px;color:#6B7280">Trees/acre: <strong style="color:#111827">' + tpa + '</strong></div>' +
+          '<div style="font-size:11px;color:#6B7280">Est. trees: <strong style="color:#111827">' + total + '</strong></div>' +
+          '<div style="font-size:11px;color:#6B7280">Planted: <strong style="color:#111827">' + b.plantYear + '</strong></div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px">' +
+          '<div style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></div>' +
+          '<span style="font-size:11px;font-weight:700;color:#374151">' + status.label + '</span>' +
+        '</div>' +
+        '<button data-blockid="' + id + '" onclick="_openMapBlock(this.dataset.blockid)" ' +
+          'style="width:100%;background:#1B4332;color:#fff;border:none;border-radius:6px;padding:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">' +
+          '&#128205; Open Block Page' +
+        '</button>' +
+      '</div>'
+    , {maxWidth: 240});
+    marker.addTo(_map);
+    bounds.push([lat, lng]);
+  });
+
+  // Fit map to all markers
+  if (bounds.length > 0) {
+    _map.fitBounds(bounds, {padding: [30, 30]});
+  }
+
+  // Invalidate size after display
+  setTimeout(() => _map.invalidateSize(), 100);
+}
+
+window._openMapBlock = function(blockId) {
+  document.getElementById('map-container').style.display = 'none';
+  document.body.style.overflow = '';
+  window.location.hash = blockId;
+  render();
+};
+
+function showGrid() {
+  document.getElementById('map-container').style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 function closeActivityModal() {
