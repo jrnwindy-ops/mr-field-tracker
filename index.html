@@ -2765,15 +2765,14 @@ async function showActivityTabs() {
 
   // Activity types to show as tabs
   const ACTIVITY_TYPES = [
-    {key:'all',           label:'All',          icon:'&#128085;', color:'#374151'},
-    {key:'Task Assigned', label:'Tasks',         icon:'&#128203;', color:'#D97706'},
-    {key:'Spray',         label:'Spray',         icon:'&#128137;', color:'#991B1B'},
-    {key:'Irrigation',    label:'Irrigation',    icon:'&#128167;', color:'#1D4ED8'},
-    {key:'Harvest',       label:'Harvest',       icon:'&#129362;', color:'#B45309'},
-    {key:'Pruning',       label:'Pruning',       icon:'&#9985;',   color:'#7C3AED'},
-    {key:'Fertilizer',    label:'Fertilizer',    icon:'&#129501;', color:'#6B7280'},
-    {key:'Check-In',      label:'Check-Ins',     icon:'&#128205;', color:'#16A34A'},
-    {key:'Checkout',      label:'Checkouts',     icon:'&#9654;',   color:'#6B7280'},
+    {key:'all',           label:'All',       icon:'&#128085;', color:'#374151'},
+    {key:'Task Assigned', label:'Tasks',     icon:'&#128203;', color:'#D97706'},
+    {key:'Spray',         label:'Spray',     icon:'&#128137;', color:'#991B1B'},
+    {key:'Irrigation',    label:'Irrigate',  icon:'&#128167;', color:'#1D4ED8'},
+    {key:'Harvest',       label:'Harvest',   icon:'&#129362;', color:'#B45309'},
+    {key:'Pruning',       label:'Prune',     icon:'&#9985;',   color:'#7C3AED'},
+    {key:'Check-In',      label:'Check-In',  icon:'&#128205;', color:'#16A34A'},
+    {key:'Checkout',      label:'Check-Out', icon:'&#9654;',   color:'#6B7280'},
   ];
 
   let allActivities = [];
@@ -2852,18 +2851,79 @@ async function showActivityTabs() {
 
   // Supplement with local in-memory data not yet in Supabase
   const existingKeys = new Set(allActivities.map(a => normalizeTime(a.time.toISOString()) + a.blockId + a.type));
+
   Object.entries(BLOCKS).forEach(([id, b]) => {
+    // Add local TASK entries
     (b.assignedTasks||[]).forEach(entry => {
       if (!entry.startsWith('TASK:')) return;
       const label = entry.replace('TASK:','').trim();
+      const labelLower = label.toLowerCase();
       const key = 'local-' + id + label;
       if (existingKeys.has(key)) return;
+
+      // Detect activity type from task label
+      let actType = 'Task Assigned';
+      if (labelLower.includes('irrigat') || labelLower.includes('regar') || labelLower.includes('riego')) actType = 'Irrigation';
+      else if (labelLower.includes('spray') || labelLower.includes('fumig') || labelLower.includes('chemical')) actType = 'Spray';
+      else if (labelLower.includes('harvest') || labelLower.includes('cosech') || labelLower.includes('pick')) actType = 'Harvest';
+      else if (labelLower.includes('prun') || labelLower.includes('podar') || labelLower.includes('trim')) actType = 'Pruning';
+      else if (labelLower.includes('fertil') || labelLower.includes('abono')) actType = 'Fertilizer';
+
       allActivities.push({
-        type: 'Task Assigned', blockId: id,
+        type: actType,
+        blockId: id,
         displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
-        detail: label + ' · Pending',
+        detail: label + ' · Pending (local)',
         worker: '', time: new Date()
       });
+      existingKeys.add(key);
+    });
+
+    // Add local irrigation status if block has it
+    if (b.lastIrrigationDate && b.lastIrrigationType) {
+      const key = 'local-irrig-' + id + b.lastIrrigationDate;
+      if (!existingKeys.has(key)) {
+        allActivities.push({
+          type: 'Irrigation',
+          blockId: id,
+          displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
+          detail: b.lastIrrigationType + ' · Dry in ' + (b.dryDays||3) + 'd',
+          worker: '', time: new Date(b.lastIrrigationDate)
+        });
+        existingKeys.add(key);
+      }
+    }
+
+    // Add local spray status if block has it
+    if (b.lastSprayDate && b.lastChemical) {
+      const key = 'local-spray-' + id + b.lastSprayDate;
+      if (!existingKeys.has(key)) {
+        allActivities.push({
+          type: 'Spray',
+          blockId: id,
+          displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
+          detail: b.lastChemical + ' · REI: ' + (b.reiDays||0) + 'h',
+          worker: '', time: new Date(b.lastSprayDate)
+        });
+        existingKeys.add(key);
+      }
+    }
+
+    // Add local checkins
+    (b.checkins||[]).forEach(c => {
+      const key = 'local-checkin-' + id + normalizeTime(c.time);
+      if (existingKeys.has(key)) return;
+      const elapsed = c.checkout
+        ? ((new Date(c.checkout) - new Date(c.time))/3600000).toFixed(1) + ' hrs'
+        : 'Active';
+      allActivities.push({
+        type: 'Check-In', blockId: id,
+        displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
+        detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') +
+          (c.foreman ? ' · ' + c.foreman : '') + ' · ' + elapsed,
+        worker: c.foreman||'', time: new Date(c.time)
+      });
+      existingKeys.add(key);
     });
   });
 
@@ -2931,7 +2991,10 @@ window._actTab = function(tab) {
       '<div style="font-size:18px;font-weight:800;color:#111827">&#128085; Ranch Activities</div>' +
       '<button onclick="closeActivityModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9CA3AF">&#x2715;</button>' +
     '</div>' +
-    '<div id="act-tabs-bar" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:8px;flex-shrink:0;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-right:4px">' + buildTabs() + '</div>' +
+    '<div style="position:relative;flex-shrink:0">' +
+      '<div id="act-tabs-bar" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-right:28px">' + buildTabs() + '</div>' +
+      '<div style="position:absolute;right:0;top:0;height:calc(100% - 8px);width:28px;background:linear-gradient(to right,transparent,#fff);pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:2px"><span style="font-size:14px;color:#9CA3AF">&#8250;</span></div>' +
+    '</div>' +
     '<div id="act-tabs-content" style="overflow-y:auto;flex:1">' + renderTabContent('all') + '</div>';
 
   modal.classList.add('open');
