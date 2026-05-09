@@ -2708,7 +2708,7 @@ function showCheckoutTaskModal(blockId, checkin, tasks) {
     '<div id="checkout-task-list">' + taskItems + '</div>' +
     '<div style="font-size:11px;color:#9CA3AF;margin:10px 0 16px">Checked tasks will be marked complete and removed from the block.</div>' +
     '<div style="display:flex;gap:8px">' +
-      '<button onclick="document.getElementById('modal-checkout-tasks').classList.remove('open')" ' +
+      '<button onclick="closeCheckoutModal()" ' +
         'style="flex:1;background:#F3F4F6;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;color:#374151">Cancel</button>' +
       '<button onclick="submitCheckoutTasks()" style="flex:2;background:#991B1B;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;color:#fff">Confirm Checkout</button>' +
         'style="flex:2;background:#991B1B;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;color:#fff">Confirm Checkout</button>' +
@@ -2782,6 +2782,10 @@ async function confirmCheckout(blockId, checkin, completedTasks) {
 function refreshDailyReport() {
   const days = parseInt(document.getElementById('daily-date-range').value);
   showDailySummary(days);
+}
+
+function closeCheckoutModal() {
+  document.getElementById('modal-checkout-tasks').classList.remove('open');
 }
 
 function goHome() {
