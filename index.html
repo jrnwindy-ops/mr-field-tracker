@@ -315,6 +315,12 @@ textarea.form-input{height:80px;resize:none}
 </div>
 </div>
 
+<!-- ACTIVITY TABS MODAL -->
+<div class="modal-bg" id="modal-activity-tabs">
+<div class="modal" style="max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
+</div>
+</div>
+
 <!-- DAILY SUMMARY MODAL -->
 <div class="modal-bg" id="modal-daily-summary">
 <div class="modal" style="max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
@@ -1689,12 +1695,20 @@ function renderBlock(b, id) {
   const ranch = lang==='es' ? b.ranchEs : b.ranch;
   const topworkBadge = b.topwork ? `<div class="topwork-badge">&#9881; ${t('topwork_label')} ${b.topwork}</div>` : '';
 
-  const tasksHtml = b.assignedTasks.length
-    ? b.assignedTasks.map((task,i) => `<div class="task-item">
-        <div class="task-dot"></div>
-        <div class="task-text" style="flex:1">${task}</div>
-      </div>`).join('')
-    : `<div class="no-tasks">${t('no_tasks')}</div>`;
+  // Sort tasks: active TASK: first, then log entries
+  const activeTasks = b.assignedTasks.filter(t => t.startsWith('TASK:'));
+  const logEntries = b.assignedTasks.filter(t => !t.startsWith('TASK:'));
+  const sortedTasks = [...activeTasks, ...logEntries];
+  const tasksHtml = sortedTasks.length
+    ? sortedTasks.map((task,i) => {
+        const isTask = task.startsWith('TASK:');
+        const label = isTask ? task.replace('TASK:','').trim() : task;
+        return '<div class="task-item" style="' + (isTask ? 'background:var(--amber-bg);border-left:3px solid var(--amber);' : '') + '">' +
+          '<div class="task-dot" style="background:' + (isTask ? 'var(--amber)' : 'var(--tx4)') + '"></div>' +
+          '<div class="task-text" style="flex:1;font-weight:' + (isTask ? '600' : '400') + '">' + label + '</div>' +
+        '</div>';
+      }).join('')
+    : '<div class="no-tasks">' + t('no_tasks') + '</div>';
 
   // Check-in section — shows big button if URL has ?checkin=1 (from QR scan)
   const isQRScan = new URLSearchParams(window.location.search).get('checkin') === '1';
@@ -1810,6 +1824,14 @@ function renderBlock(b, id) {
         <div class="detail-card">
           <div class="detail-label">${t('site_id')}</div>
           <div class="detail-value">${b.siteId}</div>
+        </div>
+        <div class="detail-card highlight">
+          <div class="detail-label">Trees / Acre</div>
+          <div class="detail-value">${calcTreesPerAcre(b.spacing)}</div>
+        </div>
+        <div class="detail-card highlight">
+          <div class="detail-label">Est. Total Trees</div>
+          <div class="detail-value">${calcTotalTrees(b.spacing, b.acreage)}</div>
         </div>
         <div class="detail-card">
           <div class="detail-label">${t('orig_block')}</div>
@@ -2031,6 +2053,25 @@ function getLastActiveTask(b) {
   return raw.split('/')[0].split(',')[0].trim();
 }
 
+function calcTreesPerAcre(spacing) {
+  if (!spacing || spacing === 'N/A') return 'N/A';
+  const parts = spacing.toLowerCase().replace(/\s/g,'').split('x');
+  if (parts.length !== 2) return 'N/A';
+  const row = parseFloat(parts[0]), tree = parseFloat(parts[1]);
+  if (isNaN(row) || isNaN(tree) || row === 0 || tree === 0) return 'N/A';
+  return Math.round(43560 / (row * tree)).toLocaleString();
+}
+
+function calcTotalTrees(spacing, acreage) {
+  if (!spacing || spacing === 'N/A') return 'N/A';
+  const parts = spacing.toLowerCase().replace(/\s/g,'').split('x');
+  if (parts.length !== 2) return 'N/A';
+  const row = parseFloat(parts[0]), tree = parseFloat(parts[1]);
+  const acres = parseFloat(acreage);
+  if (isNaN(row) || isNaN(tree) || isNaN(acres)) return 'N/A';
+  return Math.round((43560 / (row * tree)) * acres).toLocaleString();
+}
+
 function getBlockStatus(b) {
   // RED — REI active (not safe for entry without PPE)
   const rei = getReiStatus(b);
@@ -2223,7 +2264,8 @@ function renderNotFound() {
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3)">${t('all_blocks')} &mdash; ${lang==='es'?'ordenado por estado':'sorted by status'}</div>
       <div style="display:flex;align-items:center;gap:10px">
         <div style="font-size:11px;color:var(--tx4)">${cloudOk ? '&#9729; Live' : '&#128190; Local'} &mdash; ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
-        <button onclick="showDailySummary(0)" style="background:var(--g900);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128202; Daily Report</button>
+        <button onclick="showDailySummary(0)" style="background:var(--g900);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:4px">&#128202; Daily Report</button>
+        <button onclick="showActivityTabs()" style="background:var(--g600);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128085; Activities</button>
       </div>
     </div>
     ${legend}
@@ -2274,6 +2316,7 @@ document.getElementById('modal-log').addEventListener('click',function(e){if(e.t
 document.getElementById('modal-assign').addEventListener('click',function(e){if(e.target===this)closeAssignModal();});
 document.getElementById('modal-daily-summary').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 document.getElementById('modal-checkout-tasks').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('modal-activity-tabs').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 
 async function submitLog() {
   const type = document.getElementById('log-type').value;
@@ -2779,9 +2822,128 @@ async function confirmCheckout(blockId, checkin, completedTasks) {
 }
 
 
+async function showActivityTabs() {
+  const modal = document.getElementById('modal-activity-tabs');
+  const inner = modal.querySelector('.modal');
+
+  // Activity types to show as tabs
+  const ACTIVITY_TYPES = [
+    {key:'all',     label:'All',       icon:'&#128085;', color:'#374151'},
+    {key:'Spray',   label:'Spray',     icon:'&#128137;', color:'#991B1B'},
+    {key:'Irrigation',label:'Irrigation',icon:'&#128167;',color:'#1D4ED8'},
+    {key:'Harvest', label:'Harvest',   icon:'&#129362;', color:'#B45309'},
+    {key:'Pruning', label:'Pruning',   icon:'&#9985;',   color:'#7C3AED'},
+    {key:'Fertilizer',label:'Fertilizer',icon:'&#129501;',color:'#D97706'},
+    {key:'Check-In',label:'Check-Ins', icon:'&#128205;', color:'#16A34A'},
+  ];
+
+  let allActivities = [];
+  let currentTab = 'all';
+
+  // Load from Supabase
+  if (cloudOk) {
+    try {
+      const since30 = new Date(Date.now() - 30*24*60*60*1000).toISOString();
+      const [actsRes, checkinsRes] = await Promise.all([
+        sb.from('block_activities').select('*').gte('created_at', since30).order('created_at', {ascending: false}),
+        sb.from('block_checkins').select('*').gte('created_at', since30).order('created_at', {ascending: false})
+      ]);
+      (actsRes.data||[]).forEach(a => {
+        const b = BLOCKS[a.block_id];
+        allActivities.push({
+          type: a.activity_type, blockId: a.block_id,
+          displayId: b ? b.displayId : a.block_id,
+          ranch: b ? b.ranch : '', variety: b ? b.variety : '',
+          acreage: b ? b.acreage : '',
+          detail: a.chemical ? a.chemical + ' · REI: ' + a.rei_days + 'h'
+                : a.irrig_type ? a.irrig_type + ' · Dry in ' + a.dry_days + 'd'
+                : a.notes || '',
+          worker: a.logged_by || '',
+          time: new Date(a.created_at)
+        });
+      });
+      (checkinsRes.data||[]).forEach(c => {
+        const b = BLOCKS[c.block_id];
+        allActivities.push({
+          type: 'Check-In', blockId: c.block_id,
+          displayId: b ? b.displayId : c.block_id,
+          ranch: b ? b.ranch : '', variety: b ? b.variety : '',
+          acreage: b ? b.acreage : '',
+          detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') + (c.foreman ? ' · ' + c.foreman : '') + (c.checkout ? ' · Checked out' : ' · Active'),
+          worker: c.foreman || '',
+          time: new Date(c.created_at)
+        });
+      });
+    } catch(e) { console.warn('Activity tabs error:', e); }
+  }
+
+  function renderTabContent(tab) {
+    const filtered = tab === 'all' ? allActivities : allActivities.filter(a => a.type === tab);
+    if (!filtered.length) {
+      return '<div style="text-align:center;padding:40px 20px;color:#9CA3AF">No ' + tab + ' activities in last 30 days</div>';
+    }
+    const typeColors = {'Spray':'#991B1B','Irrigation':'#1D4ED8','Harvest':'#B45309',
+      'Pruning':'#7C3AED','Fertilizer':'#D97706','Check-In':'#16A34A','Checkout':'#6B7280','Other':'#374151'};
+    return filtered.map(a => {
+      const color = typeColors[a.type] || '#374151';
+      const timeStr = a.time.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' +
+        a.time.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+      return '<div data-blockid="' + a.blockId + '" onclick="_openBlock(this.dataset.blockid)" style="display:flex;gap:12px;padding:11px 0;border-bottom:1px solid #F3F4F6;cursor:pointer;align-items:flex-start">' +
+        '<div style="flex-shrink:0;width:34px;height:34px;border-radius:50%;background:' + color + '20;border:2px solid ' + color + ';display:flex;align-items:center;justify-content:center;font-size:14px;margin-top:2px">' +
+          (a.type==='Spray'?'&#128137;':a.type==='Irrigation'?'&#128167;':a.type==='Harvest'?'&#129362;':a.type==='Pruning'?'&#9985;':a.type==='Fertilizer'?'&#129501;':'&#128205;') +
+        '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">' +
+            '<span style="font-size:12px;font-weight:700;color:' + color + '">' + a.type + '</span>' +
+            '<span style="font-size:11px;color:#9CA3AF;white-space:nowrap;margin-left:8px">' + timeStr + '</span>' +
+          '</div>' +
+          '<div style="font-size:13px;font-weight:600;color:#111827">' + a.displayId + ' · ' + (a.variety||'') + '</div>' +
+          '<div style="font-size:12px;color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + a.ranch + (a.detail ? ' · ' + a.detail : '') + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function buildTabs() {
+    return ACTIVITY_TYPES.map(t => {
+      const count = t.key === 'all' ? allActivities.length : allActivities.filter(a => a.type === t.key).length;
+      const isActive = t.key === currentTab;
+      return '<button data-tab="' + t.key + '" onclick="_actTab(this.dataset.tab)" style="' +
+        'display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:20px;border:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;white-space:nowrap;' +
+        (isActive ? 'background:' + t.color + ';color:#fff;' : 'background:#F3F4F6;color:#374151;') +
+        '">' + t.icon + ' ' + t.label + ' <span style="opacity:.7">(' + count + ')</span></button>';
+    }).join('');
+  }
+
+  window._openBlock = function(blockId) {
+  document.getElementById('modal-activity-tabs').classList.remove('open');
+  window.location.hash = blockId;
+  render();
+};
+window._actTab = function(tab) {
+    currentTab = tab;
+    document.getElementById('act-tabs-bar').innerHTML = buildTabs();
+    document.getElementById('act-tabs-content').innerHTML = renderTabContent(tab);
+  };
+
+  inner.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0">' +
+      '<div style="font-size:18px;font-weight:800;color:#111827">&#128085; Ranch Activities</div>' +
+      '<button onclick="closeActivityModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9CA3AF">&#x2715;</button>' +
+    '</div>' +
+    '<div id="act-tabs-bar" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;flex-shrink:0;scrollbar-width:none">' + buildTabs() + '</div>' +
+    '<div id="act-tabs-content" style="overflow-y:auto;flex:1">' + renderTabContent('all') + '</div>';
+
+  modal.classList.add('open');
+}
+
 function refreshDailyReport() {
   const days = parseInt(document.getElementById('daily-date-range').value);
   showDailySummary(days);
+}
+
+function closeActivityModal() {
+  document.getElementById('modal-activity-tabs').classList.remove('open');
 }
 
 function closeCheckoutModal() {
