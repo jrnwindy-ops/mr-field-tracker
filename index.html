@@ -3003,9 +3003,14 @@ function makePin(color) {
   });
 }
 
-function showMapView() {
+async function showMapView() {
   document.getElementById('map-container').style.display = 'flex';
   document.body.style.overflow = 'hidden';
+
+  // Load latest statuses from cloud before plotting pins
+  if (cloudOk) {
+    try { await loadAllBlockStatuses(); } catch(e) {}
+  }
 
   // Init map once
   if (!_map) {
@@ -3026,10 +3031,13 @@ function showMapView() {
   // Add a marker for each block
   const bounds = [];
   Object.entries(BLOCKS).forEach(([id, b]) => {
+    try {
     if (!b.lat || !b.lng) return;
     const lat = parseFloat(b.lat);
     const lng = parseFloat(b.lng);
     if (isNaN(lat) || isNaN(lng)) return;
+    if (!b.assignedTasks) b.assignedTasks = [];
+    if (!b.checkins) b.checkins = [];
     const color = getStatusColor(b);
     const status = getBlockStatus(b);
     const tpa = calcTreesPerAcre(b.spacing);
@@ -3060,6 +3068,7 @@ function showMapView() {
     , {maxWidth: 240});
     marker.addTo(_map);
     bounds.push([lat, lng]);
+    } catch(e) { console.warn('Marker error for', id, e); }
   });
 
   // Fit map to all markers
