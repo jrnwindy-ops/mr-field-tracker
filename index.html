@@ -345,14 +345,16 @@ textarea.form-input{height:80px;resize:none}
   <textarea class="form-input" id="assign-task-input" style="height:90px" placeholder="e.g. Irrigate rows 1-20 / Regar filas 1-20"></textarea>
   <div style="margin-bottom:12px">
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--tx3);margin-bottom:8px">Quick tasks / Tareas rapidas</div>
-    <span class="assign-tag" onclick="quickTask('Irrigate full block / Regar bloque completo')">Irrigate / Regar</span>
-    <span class="assign-tag" onclick="quickTask('Apply spray treatment / Aplicar tratamiento de fumigacion')">Spray / Fumigar</span>
-    <span class="assign-tag" onclick="quickTask('Prune trees / Podar arboles')">Prune / Podar</span>
-    <span class="assign-tag" onclick="quickTask('Apply fertilizer / Aplicar fertilizante')">Fertilize / Fertilizar</span>
-    <span class="assign-tag" onclick="quickTask('General inspection / Inspeccion general')">Inspect / Inspeccionar</span>
-    <span class="assign-tag" onclick="quickTask('Pick up harvest bins / Recoger cajas de cosecha')">Harvest / Cosechar</span>
-    <span class="assign-tag" onclick="quickTask('Equipment repair needed / Reparacion de equipo necesaria')">Repair / Reparar</span>
+    <span class="assign-tag" data-task="Irrigate full block / Regar bloque completo" onclick="quickTask(this.dataset.task)">Irrigate / Regar</span>
+    <span class="assign-tag" data-task="Apply spray treatment / Aplicar tratamiento de fumigacion" onclick="quickTask(this.dataset.task)">Spray / Fumigar</span>
+    <span class="assign-tag" data-task="Prune trees / Podar arboles" onclick="quickTask(this.dataset.task)">Prune / Podar</span>
+    <span class="assign-tag" data-task="Apply fertilizer / Aplicar fertilizante" onclick="quickTask(this.dataset.task)">Fertilize / Fertilizar</span>
+    <span class="assign-tag" data-task="General inspection / Inspeccion general" onclick="quickTask(this.dataset.task)">Inspect / Inspeccionar</span>
+    <span class="assign-tag" onclick="checkPHIAndHarvest()">Harvest / Cosechar</span>
+    <span class="assign-tag" data-task="Equipment repair needed / Reparacion de equipo necesaria" onclick="quickTask(this.dataset.task)">Repair / Reparar</span>
   </div>
+  <label class="form-label" style="margin-top:4px">Scheduled Date <span style="font-weight:400;color:var(--tx3)">(optional / opcional)</span></label>
+  <input class="form-input" id="assign-task-date" type="date" style="margin-bottom:12px">
   <div class="form-actions">
     <button class="btn-cancel" onclick="closeAssignModal()">Cancel / Cancelar</button>
     <button class="btn-submit" onclick="submitAssignTask()">Assign / Asignar</button>
@@ -1349,9 +1351,11 @@ async function loadBlockData(blockId) {
     // Rebuild assignedTasks from DB
     const tasks = tasksRes.data || [];
     const acts = actsRes.data || [];
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
     block.assignedTasks = [
       ...tasks.map(t => 'TASK: ' + t.task),
-      ...acts.map(a => {
+      // Only include activities from last 24 hours
+      ...acts.filter(a => new Date(a.created_at) > cutoff).map(a => {
         const d = new Date(a.created_at).toLocaleDateString();
         const tm = new Date(a.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
         if (a.activity_type === 'Spray') {
@@ -1360,8 +1364,9 @@ async function loadBlockData(blockId) {
         if (a.activity_type === 'Irrigation') {
           return d + ' ' + tm + ' - Irrigation: ' + (a.irrig_type||'') + ' | Dry in ' + (a.dry_days||3) + 'd' + (a.logged_by ? ' (' + a.logged_by + ')' : '');
         }
+        if (a.activity_type === 'Checkout') return null; // checkouts shown via checkins
         return d + ' ' + tm + ' - ' + (a.activity_type||'Activity') + (a.logged_by ? ' (' + a.logged_by + ')' : '') + (a.notes ? ' - ' + a.notes : '');
-      })
+      }).filter(Boolean)
     ];
 
     // Restore REI status from most recent spray
@@ -1671,7 +1676,16 @@ function renderBlock(b, id) {
 
   // Sort tasks: active TASK: first, then log entries
   const activeTasks = b.assignedTasks.filter(t => t.startsWith('TASK:'));
-  const logEntries = b.assignedTasks.filter(t => !t.startsWith('TASK:'));
+  // Log entries only show if they are from the last 24 hours
+  const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const logEntries = b.assignedTasks.filter(t => {
+    if (t.startsWith('TASK:')) return false;
+    // Try to parse date from the log entry (format: M/D/YYYY H:MM AM/PM - ...)
+    const dateMatch = t.match(/^(\d+\/\d+\/\d+\s+\d+:\d+\s*[AP]M)/i);
+    if (!dateMatch) return true; // no date — keep it
+    const entryDate = new Date(dateMatch[1]);
+    return !isNaN(entryDate.getTime()) && entryDate > cutoff24h;
+  });
   const sortedTasks = [...activeTasks, ...logEntries];
 
   // Store task strings in a global lookup so onclick can find them by index
@@ -1707,6 +1721,9 @@ function renderBlock(b, id) {
         '</div>';
       }).join('')
     : '<div class="no-tasks">' + t('no_tasks') + '</div>';
+  const historyLink = '<div style="text-align:center;padding:8px 0 4px">' +
+    '<button onclick="showDailySummary(30)" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--g600);font-family:inherit;text-decoration:underline">View full history (30 days) / Ver historial completo</button>' +
+    '</div>';
 
   // Check-in section — shows big button if URL has ?checkin=1 (from QR scan)
   const isQRScan = new URLSearchParams(window.location.search).get('checkin') === '1';
@@ -2252,7 +2269,6 @@ function renderNotFound() {
     <span style="font-size:11px;background:#FEF9C3;color:#854D0E;border-radius:10px;padding:3px 9px;font-weight:600">&#128167; ${lang==='es'?'Campo Mojado':'Field Wet'}</span>
     <span style="font-size:11px;background:var(--g100);color:var(--g800);border-radius:10px;padding:3px 9px;font-weight:600">&#10003; ${lang==='es'?'Despejado':'Clear'}</span>
   </div>`;
-
   document.getElementById('block-content').innerHTML = `
     <div style="background:var(--g900);padding:20px 20px 18px">
       <div style="font-family:'DM Serif Display',serif;font-size:22px;color:#fff;margin-bottom:4px">M&amp;R Field Blocks</div>
@@ -2265,6 +2281,8 @@ function renderNotFound() {
         <button onclick="showMapView()" style="background:var(--g400);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128205; Map</button>
         <button onclick="showSchedule()" style="background:#7C3AED;color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128197; Schedule</button>
         <button onclick="showDailySummary(0)" style="background:var(--g900);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128202; Daily</button>
+        <button onclick="generateDailyReport()" style="background:#0369A1;color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128196; Report</button>
+        <button onclick="generateWeeklyReport()" style="background:#7C3AED;color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128196; Weekly</button>
         <button onclick="showActivityTabs()" style="background:var(--g600);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#128085; Activities</button>
       </div>
     </div>
@@ -2413,168 +2431,111 @@ function getBaseUrl() {
   return window.location.href.split('#')[0].split('?')[0];
 }
 
-function copyShareLink(blockId) {
-  const block = BLOCKS[blockId];
-  if (!block) return;
-  const url = getBaseUrl() + '?block=' + blockId + '&checkin=1#' + blockId;
-  const variety = lang==='es' ? block.varietyEs : block.variety;
-  const ranch = lang==='es' ? block.ranchEs : block.ranch;
-  const tasks = block.assignedTasks.filter(t => t.includes('TASK:'));
-  const taskList = tasks.length
-    ? tasks.slice(0,3).map((t,i) => (i+1) + '. ' + t.replace('TASK:','').trim()).join('\n')
-    : 'No tasks assigned';
-  const navUrl = 'https://www.google.com/maps/search/?api=1&query=' + block.lat + ',' + block.lng;
-
-  const fullMsg =
-    'M&R Farm Management\n' +
-    'Block: ' + block.displayId + ' - ' + variety + '\n' +
-    'Ranch: ' + ranch + '\n' +
-    'Acreage: ' + block.acreage + ' acres\n\n' +
-    'Tasks:\n' + taskList + '\n\n' +
-    'Navigate to block:\n' + navUrl + '\n\n' +
-    'Check in when you arrive:\n' + url;
-
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(fullMsg).then(() => {
-      const msg = document.getElementById('link-copied-msg');
-      if (msg) { msg.style.display='block'; setTimeout(()=>msg.style.display='none', 3000); }
-      const assignMsg = document.getElementById('assign-link-copied');
-      if (assignMsg) { assignMsg.style.display='block'; setTimeout(()=>assignMsg.style.display='none', 3000); }
-    });
-  } else {
-    prompt('Copy this message:', fullMsg);
-  }
+function shareWhatsApp(blockId, block) { showWorkOrderPicker(blockId, block, 'wa'); }
+let _woBid=null,_woBlk=null,_woMd=null;
+function showWorkOrderPicker(blockId,block,mode){
+  _woBid=blockId;_woBlk=block;_woMd=mode;
+  const acts=(block.assignedTasks||[]).filter(t=>t.startsWith('TASK:'));
+  const modal=document.getElementById('modal-checkout-tasks');
+  const inner=modal.querySelector('.modal');
+  const items=acts.length>0?acts.map((t,i)=>{let l=t.replace('TASK:','').trim();const d=l.match(/^\[[\d-]+\]\s*/);if(d)l=l.replace(d[0],'').trim();return'<label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #F3F4F6"><input type="checkbox" data-i="'+i+'" checked style="width:18px;height:18px;accent-color:#1B4332"><span style="font-size:13px;flex:1">'+l+'</span></label>';}).join(''):'<p style="font-size:13px;color:#9CA3AF;padding:8px 0">No active tasks.</p>';
+  inner.innerHTML='<div class="modal-handle"></div><div style="font-size:17px;font-weight:800;margin-bottom:4px">Work Order</div><div style="font-size:12px;color:var(--tx3);margin-bottom:12px">'+block.displayId+' &mdash; '+(lang==='es'?block.ranchEs:block.ranch)+'</div>'+(acts.length>0?'<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:8px">Select tasks:</div>':'')+'<div id="wo-tl">'+items+'</div><div style="display:flex;gap:10px;margin-top:14px"><div style="flex:1"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Workers</div><input id="wo-crew" type="number" min="1" max="99" value="1" style="width:100%;background:var(--bg);border:2px solid var(--g400);border-radius:10px;padding:11px;font-size:20px;font-weight:700;font-family:inherit;outline:none;text-align:center"></div><div style="flex:1.5"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Assignee</div><input id="wo-nm" type="text" placeholder="e.g. Jose, Crew A" style="width:100%;background:var(--bg);border:1.5px solid var(--bd);border-radius:10px;padding:11px;font-size:14px;font-family:inherit;outline:none"></div></div><div style="display:flex;gap:8px;margin-top:14px"><button onclick="closeCheckoutModal()" style="flex:1;background:#F3F4F6;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Cancel</button><button onclick="doSendWO()" style="flex:2;background:'+(mode==='wa'?'#25D366':'#1B4332')+';border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;color:#fff">'+(mode==='wa'?'Send WhatsApp':'Copy Order')+'</button></div>';
+  modal.classList.add('open');
 }
-
-function shareWhatsApp(blockId, block) {
-  const url = getBaseUrl() + '?block=' + blockId + '&checkin=1#' + blockId;
-  const variety = lang==='es' ? block.varietyEs : block.variety;
-  const ranch = lang==='es' ? block.ranchEs : block.ranch;
-  const tasks = block.assignedTasks.length
-    ? block.assignedTasks.slice(0,3).map((t,i)=>(i+1)+'. '+t).join('\n')
-    : 'No tasks assigned / Sin tareas asignadas';
-  const msg = `*M&R Farm Management*\n` +
-    `*Block:* ${block.displayId} - ${variety}\n` +
-    `*Ranch:* ${ranch}\n` +
-    `*Acreage:* ${block.acreage} acres\n\n` +
-    `*Tasks / Tareas:*\n${tasks}\n\n` +
-    `*Navigate / Navegar:*\n` +
-    `https://www.google.com/maps/search/?api=1&query=${block.lat},${block.lng}\n\n` +
-    `*Check in when you arrive / Registrate al llegar:*\n${url}`;
-  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+function doSendWO(){
+  const block=_woBlk,blockId=_woBid,mode=_woMd;
+  if(!block)return;
+  const acts=(block.assignedTasks||[]).filter(t=>t.startsWith('TASK:'));
+  const cbs=document.querySelectorAll('#wo-tl input[type=checkbox]');
+  const sel=[];
+  cbs.forEach((cb,i)=>{if(cb.checked&&acts[i]){let l=acts[i].replace('TASK:','').trim();const d=l.match(/^\[[\d-]+\]\s*/);if(d)l=l.replace(d[0],'').trim();sel.push(l);}});
+  const crew=parseInt((document.getElementById('wo-crew')||{}).value||1);
+  const name=((document.getElementById('wo-nm')||{}).value||'').trim();
+  const url=getBaseUrl()+'?block='+blockId+'&checkin=1#'+blockId;
+  const variety=lang==='es'?block.varietyEs:block.variety;
+  const ranch=lang==='es'?block.ranchEs:block.ranch;
+  const nav='https://www.google.com/maps/search/?api=1&query='+block.lat+','+block.lng;
+  const tl=sel.length>0?sel.map((t,i)=>(i+1)+'. '+t).join('\n'):'General field work';
+  const msg='M&R Farm Management - Work Order\n'+(name?'To: '+name+'\n':'')+'Block: '+block.displayId+' - '+variety+'\nRanch: '+ranch+'\nAcreage: '+block.acreage+' acres\nCrew: '+crew+' worker'+(crew>1?'s':'')+'\n\nTasks:\n'+tl+'\n\nNavigate:\n'+nav+'\n\nCheck in:\n'+url;
+  closeCheckoutModal();
+  if(mode==='wa'){window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
+  else if(navigator.clipboard){navigator.clipboard.writeText(msg).then(()=>{const el=document.getElementById('link-copied-msg');if(el){el.style.display='block';setTimeout(()=>el.style.display='none',3000);}});}
+  else{prompt('Copy:',msg);}
 }
+function copyShareLink(blockId){const block=BLOCKS[blockId];if(!block)return;showWorkOrderPicker(blockId,block,'copy');}
 
-// ── CHECK-IN ──────────────────────────────────────────────────────────────
-async function doCheckin(blockId) {
-  const block = BLOCKS[blockId];
-  if (!block) return;
-  const now = new Date();
-  if (!block.checkins) block.checkins = [];
 
-  const crewEl = document.getElementById('checkin-crew');
-  const foremanEl = document.getElementById('checkin-foreman');
-  const crew = crewEl ? parseInt(crewEl.value) || 1 : 1;
-  const foreman = foremanEl ? foremanEl.value.trim() : '';
 
-  if (crew < 1) { alert('Please enter number of workers / Por favor ingrese el numero de trabajadores'); return; }
 
-  const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-
-  function saveCheckin(lat, lng, accuracy) {
-    const checkin = {
-      time: now.toISOString(),
-      crew: crew,
-      foreman: foreman,
-      lat: lat,
-      lng: lng,
-      accuracy: accuracy
-    };
-    block.checkins.push(checkin);
-    saveCheckin_cloud(currentBlockId, {crew, foreman, lat, lng, accuracy});
-    const entry = now.toLocaleDateString() + ' ' + timeStr +
-      ' - CHECK-IN: ' + crew + ' worker' + (crew > 1 ? 's' : '') +
-      (foreman ? ' - Foreman: ' + foreman : '') +
-      (lat ? ' (GPS: ' + lat + ', ' + lng + ' +/-' + accuracy + ')' : '');
-    block.assignedTasks.unshift(entry);
-    render();
-    showCheckinSuccess(now, crew, foreman, lat ? lat + ', ' + lng : null);
-  }
-
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      pos => saveCheckin(
-        pos.coords.latitude.toFixed(5),
-        pos.coords.longitude.toFixed(5),
-        Math.round(pos.coords.accuracy) + 'm'
-      ),
-      err => saveCheckin(null, null, null),
-      {timeout: 5000, enableHighAccuracy: true}
-    );
-  } else {
-    saveCheckin(null, null, null);
-  }
-}
-
-function showCheckinSuccess(time, crew, foreman, coords) {
-  // Re-render the block which will now show checkout button via buildCheckinCard
-  render();
-}
-
-// ── ASSIGN TASK MODAL ─────────────────────────────────────────────────────
+// ── ASSIGN MODAL ──────────────────────────────────────────────────────────
 function openAssignModal() {
   document.getElementById('modal-assign').classList.add('open');
-}
-async function deleteTask(blockId, lookupKey) {
-  const block = BLOCKS[blockId];
-  if (!block) return;
-  const taskStr = (window._taskLookup && window._taskLookup[lookupKey]) || '';
-  if (!taskStr) { console.warn('Task not found:', lookupKey); return; }
-  let label = taskStr.replace('TASK:','').trim();
-  const dateMatch = label.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*/);
-  if (dateMatch) label = label.replace(dateMatch[0], '').trim();
-  if (!confirm((lang==='es' ? '¿Eliminar tarea? ' : 'Remove task? ') + label)) return;
-  const idx = block.assignedTasks.indexOf(taskStr);
-  if (idx > -1) block.assignedTasks.splice(idx, 1);
-  if (cloudOk) {
-    try {
-      await sb.from('block_tasks')
-        .update({status:'deleted', completed_at: new Date().toISOString()})
-        .eq('block_id', blockId).eq('task', label).eq('status','pending');
-    } catch(e) { console.warn('Delete task error:', e); }
-  }
-  render();
+  // Reset form
+  const inp = document.getElementById('assign-task-input');
+  if (inp) inp.value = '';
+  const dt = document.getElementById('assign-task-date');
+  if (dt) dt.value = '';
 }
 
+function closeAssignModal() {
+  document.getElementById('modal-assign').classList.remove('open');
+  // Reset after animation so next open shows fresh form
+  setTimeout(function() {
+    const modal = document.querySelector('#modal-assign .modal');
+    if (modal && modal.querySelector('#assign-task-input') === null) {
+      // Modal is showing confirmation screen - reset to form
+      openAssignModal();
+      document.getElementById('modal-assign').classList.remove('open');
+    }
+  }, 300);
+}
+
+function quickTask(text) {
+  const inp = document.getElementById('assign-task-input');
+  if (inp) inp.value = text;
+}
+
+// ── CHECKOUT TASK MODAL ────────────────────────────────────────────────────
+function closeCheckoutModal() {
+  document.getElementById('modal-checkout-tasks').classList.remove('open');
+}
+
+function closeActivityModal() {
+  document.getElementById('modal-activity-tabs').classList.remove('open');
+}
+
+function closeSchedule() {
+  document.getElementById('modal-schedule').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ── SAVE TASK DATE ─────────────────────────────────────────────────────────
 let _schedBlockId = null, _schedTaskStr = null;
+
 function scheduleTaskDate(blockId, lookupKey) {
   _schedBlockId = blockId;
   _schedTaskStr = (window._taskLookup && window._taskLookup[lookupKey]) || '';
   if (!_schedTaskStr) return;
   const taskStr = _schedTaskStr;
-  const block = BLOCKS[blockId];
-  if (!block) return;
-  // Show a date picker modal inline
   let label = taskStr.replace('TASK:','').trim();
   const dateMatch = label.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*/);
   const currentDate = dateMatch ? dateMatch[1] : '';
   if (dateMatch) label = label.replace(dateMatch[0],'').trim();
-
+  const today = new Date().toISOString().split('T')[0];
   const modal = document.getElementById('modal-checkout-tasks');
   const inner = modal.querySelector('.modal');
-  const today = new Date().toISOString().split('T')[0];
-
+  const block = BLOCKS[blockId] || {};
   inner.innerHTML =
     '<div class="modal-handle"></div>' +
     '<div style="font-size:17px;font-weight:800;color:var(--tx);margin-bottom:4px">&#128197; Schedule Task</div>' +
-    '<div style="font-size:13px;color:var(--tx3);margin-bottom:16px">' + block.displayId + ' · ' + label + '</div>' +
+    '<div style="font-size:12px;color:var(--tx3);margin-bottom:16px">' + (block.displayId||blockId) + ' · ' + label + '</div>' +
     '<label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);letter-spacing:.05em;margin-bottom:6px;display:block">Scheduled Date / Fecha Programada</label>' +
-    '<input id="task-schedule-date" type="date" value="' + (currentDate || today) + '" min="' + today + '" ' +
+    '<input id="task-schedule-date" type="date" value="' + (currentDate||today) + '" min="' + today + '" ' +
       'style="width:100%;background:var(--bg);border:2px solid var(--g400);border-radius:10px;padding:12px;font-size:16px;font-family:inherit;outline:none;margin-bottom:8px;box-sizing:border-box">' +
-    '<div style="font-size:11px;color:var(--tx3);margin-bottom:16px">Leave blank to remove the scheduled date / Dejar en blanco para quitar la fecha</div>' +
+    '<div style="font-size:11px;color:var(--tx3);margin-bottom:16px">Leave blank to remove scheduled date</div>' +
     '<div style="display:flex;gap:8px">' +
       '<button onclick="closeCheckoutModal()" style="flex:1;background:#F3F4F6;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Cancel</button>' +
-      '<button onclick="_saveTaskDateBtn()" ' +
-        'style="flex:2;background:#7C3AED;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;color:#fff">Save Date / Guardar</button>' +
+      '<button onclick="_saveTaskDateBtn()" style="flex:2;background:#7C3AED;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;color:#fff">Save Date</button>' +
     '</div>';
   modal.classList.add('open');
 }
@@ -2582,294 +2543,24 @@ function scheduleTaskDate(blockId, lookupKey) {
 window._saveTaskDateBtn = function() {
   saveTaskDate(_schedBlockId, encodeURIComponent(_schedTaskStr));
 };
+
 function saveTaskDate(blockId, encodedTask) {
   const block = BLOCKS[blockId];
   if (!block) return;
   const taskStr = decodeURIComponent(encodedTask);
-  const newDate = document.getElementById('task-schedule-date').value;
-  // Find the task in assignedTasks
+  const newDate = (document.getElementById('task-schedule-date')||{}).value || '';
   const idx = block.assignedTasks.indexOf(taskStr);
   if (idx === -1) { closeCheckoutModal(); return; }
-  // Get clean label
   let label = taskStr.replace('TASK:','').trim();
   const dateMatch = label.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*/);
   if (dateMatch) label = label.replace(dateMatch[0],'').trim();
-  // Rebuild task string with new date
   const newTask = newDate ? 'TASK: [' + newDate + '] ' + label : 'TASK: ' + label;
   block.assignedTasks[idx] = newTask;
   closeCheckoutModal();
   render();
 }
 
-function checkPHIAndHarvest() {
-  const block = BLOCKS[currentBlockId];
-  if (!block) { quickTask('Pick up harvest bins / Recoger cajas de cosecha'); return; }
-  const phi = getPHIStatus(block);
-  if (phi && phi.active) {
-    const warn = lang === 'es'
-      ? '⚠️ ADVERTENCIA: Intervalo Pre-Cosecha Activo\n\n' + phi.chemical + '\n' + phi.daysLeft + ' dias hasta que la cosecha sea permitida\nFecha permitida: ' + phi.expiry + '\n\n¿Continuar de todas formas?'
-      : '⚠️ WARNING: Pre-Harvest Interval Active\n\n' + phi.chemical + '\nDo not harvest for ' + phi.daysLeft + ' more day' + (phi.daysLeft!==1?'s':'') + '\nHarvest allowed after: ' + phi.expiry + '\n\nContinue anyway?';
-    if (!confirm(warn)) return;
-  }
-  quickTask('Pick up harvest bins / Recoger cajas de cosecha');
-}
-
-function closeAssignModal() {
-  document.getElementById('modal-assign').classList.remove('open');
-  // Reset modal back to form view after closing
-  setTimeout(function() {
-    const modal = document.querySelector('#modal-assign .modal');
-    modal.innerHTML = `
-      <div class="modal-handle"></div>
-      <h2>Assign Task / Asignar Tarea</h2>
-      <label class="form-label">Task Description / Descripcion de la Tarea</label>
-      <textarea class="form-input" id="assign-task-input" style="height:90px" placeholder="e.g. Irrigate rows 1-20 / Regar filas 1-20"></textarea>
-      <label class="form-label" style="margin-top:4px">Scheduled Date / Fecha Programada <span style="font-weight:400;color:var(--tx3)">(optional)</span></label>
-      <input class="form-input" id="assign-task-date" type="date" min="${new Date().toISOString().split('T')[0]}" placeholder="Select date" style="margin-bottom:12px">
-      <div style="margin-bottom:12px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--tx3);margin-bottom:8px">Quick tasks / Tareas rapidas</div>
-        <span class="assign-tag" onclick="quickTask('Irrigate full block / Regar bloque completo')">Irrigate / Regar</span>
-        <span class="assign-tag" onclick="quickTask('Apply spray treatment / Aplicar tratamiento de fumigacion')">Spray / Fumigar</span>
-        <span class="assign-tag" onclick="quickTask('Prune trees / Podar arboles')">Prune / Podar</span>
-        <span class="assign-tag" onclick="quickTask('Apply fertilizer / Aplicar fertilizante')">Fertilize / Fertilizar</span>
-        <span class="assign-tag" onclick="quickTask('General inspection / Inspeccion general')">Inspect / Inspeccionar</span>
-        <span class="assign-tag" onclick="checkPHIAndHarvest()">Harvest / Cosechar</span>
-        <span class="assign-tag" onclick="quickTask('Equipment repair needed / Reparacion de equipo necesaria')">Repair / Reparar</span>
-      </div>
-      <div class="form-actions">
-        <button class="btn-cancel" onclick="closeAssignModal()">Cancel / Cancelar</button>
-        <button class="btn-submit" onclick="submitAssignTask()">Assign / Asignar</button>
-      </div>
-    `;
-    // Re-attach background click handler
-    document.getElementById('modal-assign').addEventListener('click', function(e){if(e.target===this)closeAssignModal();});
-  }, 300);
-}
-function quickTask(text) {
-  document.getElementById('assign-task-input').value = text;
-}
-async function submitAssignTask() {
-  const task = document.getElementById('assign-task-input').value.trim();
-  if (!task) { alert('Please enter a task description.'); return; }
-  const scheduledDate = (document.getElementById('assign-task-date') || {}).value || '';
-  const block = BLOCKS[currentBlockId];
-  if (!block) return;
-
-  // Detect if this is an irrigation or spray task
-  const taskLower = task.toLowerCase();
-  const isIrrig = taskLower.includes('irrigat') || taskLower.includes('regar') || taskLower.includes('riego');
-  const isSpray = taskLower.includes('spray') || taskLower.includes('fumig') || taskLower.includes('chemical');
-
-  if (isIrrig) {
-    showIrrigPrompt(task, block);
-    return;
-  }
-  if (isSpray) {
-    showSprayPrompt(task, block);
-    return;
-  }
-
-  saveTaskAndShowShare(task, block);
-}
-
-let _promptTask = null, _promptDate = null;
-function showIrrigPrompt(task, block) {
-  _promptTask = task;
-  _promptDate = (document.getElementById('assign-task-date') || {}).value || '';
-  const scheduledDate = _promptDate;
-  const today = new Date().toISOString().split('T')[0];
-  const modal = document.querySelector('#modal-assign .modal');
-  modal.innerHTML = `
-    <div class="modal-handle"></div>
-    <h2>&#128167; Irrigation Details / Detalles de Riego</h2>
-    <div style="background:var(--amber-bg);border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--amber)">
-      &#9888; Logging irrigation will mark this field <strong>WET</strong> — no heavy equipment or spray rigs<br>
-      <span style="color:#B45309">Registrar riego marcara el campo como <strong>MOJADO</strong></span>
-    </div>
-    <label class="form-label">Irrigation Type / Tipo de Riego</label>
-    <select class="form-input" id="prompt-irrig-type">
-      <option value="Flood / Inundacion">Flood / Inundacion</option>
-      <option value="Drip / Goteo">Drip / Goteo</option>
-      <option value="Micro-sprinkler / Micro-aspersor">Micro-sprinkler / Micro-aspersor</option>
-      <option value="Sprinkler / Aspersor">Sprinkler / Aspersor</option>
-      <option value="Furrow / Surco">Furrow / Surco</option>
-    </select>
-    <label class="form-label">Irrigation Date / Fecha de Riego</label>
-    <input class="form-input" id="prompt-irrig-date" type="date" value="${today}">
-    <label class="form-label">Est. Days to Dry / Dias Est. para Secar</label>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
-      <input class="form-input" id="prompt-dry-days" type="number" min="1" max="14" value="3" style="margin-bottom:0;flex:1">
-      <span style="font-size:12px;color:var(--tx3);white-space:nowrap">days / dias</span>
-    </div>
-    <div class="form-actions">
-      <button class="btn-cancel" onclick="_skipIrrigPrompt()">Skip / Omitir</button>
-      <button class="btn-submit" onclick="saveIrrigAndTask('${task}', '${scheduledDate}')">Save &amp; Assign / Guardar</button>
-    </div>
-  `;
-}
-
-window._skipIrrigPrompt = function() {
-  const taskWithDate = _promptDate ? '[' + _promptDate + '] ' + _promptTask : _promptTask;
-  saveTaskAndShowShare(taskWithDate, BLOCKS[currentBlockId]);
-};
-window._skipSprayPrompt = function() {
-  const taskWithDate = _promptDate ? '[' + _promptDate + '] ' + _promptTask : _promptTask;
-  saveTaskAndShowShare(taskWithDate, BLOCKS[currentBlockId]);
-};
-
-function showSprayPrompt(task, block) {
-  _promptTask = task;
-  _promptDate = (document.getElementById('assign-task-date') || {}).value || '';
-  const scheduledDate = _promptDate;
-  const today = new Date().toISOString().split('T')[0];
-  const chemOptions = CHEMICALS.map(c =>
-    '<option value="' + c.name + '" data-rei="' + c.rei + '" data-phi="' + c.phi + '">' +
-    c.name + (c.rei > 0 ? ' (' + c.rei + 'h REI' + (c.phi > 0 ? ', ' + c.phi + 'd PHI' : '') + ')' : '') +
-    '</option>'
-  ).join('');
-  const modal = document.querySelector('#modal-assign .modal');
-  modal.innerHTML = `
-    <div class="modal-handle"></div>
-    <h2>&#128137; Spray Details / Detalles de Fumigacion</h2>
-    <div style="background:var(--red-bg);border:1px solid #FECACA;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--red)">
-      &#9888; Logging a spray will set REI restriction on this block<br>
-      <span>Registrar fumigacion activara restriccion REI en este bloque</span>
-    </div>
-    <label class="form-label">Chemical / Quimico</label>
-    <select class="form-input" id="prompt-chemical" onchange="
-      var opt=this.options[this.selectedIndex];
-      var rei=opt.dataset.rei;
-      if(rei!==undefined) document.getElementById('prompt-rei').value=rei;
-      var phi=opt.dataset.phi;
-      var phiEl=document.getElementById('prompt-phi-info');
-      if(phiEl && phi!==undefined) phiEl.textContent=phi>0?'PHI: '+phi+' days before harvest':'PHI: No restriction';
-    ">
-      <option value="">Select / Seleccionar</option>
-      ${chemOptions}
-    </select>
-    <label class="form-label">REI Hours / Horas REI</label>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
-      <input class="form-input" id="prompt-rei" type="number" min="0" max="72" placeholder="e.g. 24" style="margin-bottom:0;flex:1">
-      <span style="font-size:12px;color:var(--tx3);white-space:nowrap">hours / horas</span>
-    </div>
-    <label class="form-label">Spray Date / Fecha de Fumigacion</label>
-    <input class="form-input" id="prompt-spray-date" type="date" value="${today}">
-    <div id="prompt-phi-info" style="font-size:12px;color:#B45309;font-weight:600;margin-bottom:12px;padding:8px 10px;background:#FFFBEB;border-radius:8px;display:${CHEMICALS[0].phi>0?'block':'none'}">PHI: Select a chemical to see restriction</div>
-    <div class="form-actions">
-      <button class="btn-cancel" onclick="_skipSprayPrompt()">Skip / Omitir</button>
-      <button class="btn-submit" onclick="saveSprayAndTask('${task}', '${scheduledDate}')">Save &amp; Assign / Guardar</button>
-    </div>
-  `;
-}
-
-async function saveIrrigAndTask(task, scheduledDate) {
-  const block = BLOCKS[currentBlockId];
-  const irrigType = document.getElementById('prompt-irrig-type').value;
-  const irrigDate = document.getElementById('prompt-irrig-date').value;
-  const dryDays = parseInt(document.getElementById('prompt-dry-days').value) || 3;
-  if (!irrigDate) { alert('Please enter irrigation date.'); return; }
-  block.lastIrrigationType = irrigType;
-  block.lastIrrigationDate = irrigDate;
-  block.dryDays = dryDays;
-  block.lastIrrigation = new Date(irrigDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  // Save as block_activity so it shows in Irrigation tab
-  await saveActivity(currentBlockId, {
-    activity_type: 'Irrigation',
-    irrig_type: irrigType,
-    irrig_date: irrigDate,
-    dry_days: dryDays,
-    notes: task.replace('TASK:','').trim()
-  });
-  const taskWithDate = scheduledDate ? '[' + scheduledDate + '] ' + task : task;
-  saveTaskAndShowShare(taskWithDate, block);
-}
-
-async function saveSprayAndTask(task, scheduledDate) {
-  const block = BLOCKS[currentBlockId];
-  const chem = document.getElementById('prompt-chemical').value;
-  const rei = parseInt(document.getElementById('prompt-rei').value) || 0;
-  const sprayDate = document.getElementById('prompt-spray-date').value;
-  if (!chem) { alert('Please select a chemical.'); return; }
-  if (!sprayDate) { alert('Please enter spray date.'); return; }
-  const chemData = CHEMICALS.find(c => c.name === chem) || {phi:0};
-  block.lastChemical = chem;
-  block.reiDays = rei;
-  block.lastSprayPhi = chemData.phi;
-  block.lastSprayDate = sprayDate;
-  block.lastSpray = new Date(sprayDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  // Save as block_activity so it shows in Spray tab
-  await saveActivity(currentBlockId, {
-    activity_type: 'Spray',
-    chemical: chem,
-    rei_days: rei,
-    spray_date: sprayDate,
-    notes: task.replace('TASK:','').trim()
-  });
-  const taskWithDate = scheduledDate ? '[' + scheduledDate + '] ' + task : task;
-  saveTaskAndShowShare(taskWithDate, block);
-}
-
-async function saveTaskAndShowShare(task, block) {
-  const entry = 'TASK: ' + task;
-  block.assignedTasks.push(entry);
-  await saveTask(currentBlockId, task);
-
-  // Switch modal to share confirmation view
-  const modal = document.querySelector('#modal-assign .modal');
-  const variety = lang==='es' ? block.varietyEs : block.variety;
-  const ranch = lang==='es' ? block.ranchEs : block.ranch;
-  modal.innerHTML = `
-    <div class="modal-handle"></div>
-    <div style="text-align:center;margin-bottom:18px">
-      <div style="font-size:36px;margin-bottom:8px">&#10003;</div>
-      <div style="font-size:18px;font-weight:700;color:var(--g800);margin-bottom:4px">Task Assigned / Tarea Asignada</div>
-      <div style="font-size:13px;color:var(--tx3);line-height:1.5">${block.displayId} &mdash; ${variety}<br>${ranch}</div>
-    </div>
-    <div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--g800)">
-      <strong>Task:</strong> ${task}
-    </div>
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);margin-bottom:10px">Send to Worker / Enviar al Trabajador</div>
-    <button class="share-btn share-btn-wa" style="margin-bottom:12px" onclick="shareWhatsApp('${currentBlockId}', BLOCKS['${currentBlockId}'])">
-      <span class="share-btn-icon">&#128172;</span>
-      <span>Send via WhatsApp</span>
-    </button>
-    <button class="share-btn" style="margin-bottom:16px" onclick="copyShareLink('${currentBlockId}')">
-      <span class="share-btn-icon">&#128279;</span>
-      <span>Copy Work Order</span>
-    </button>
-    <div id="assign-link-copied" style="display:none;text-align:center;font-size:12px;color:var(--g600);margin-bottom:12px">&#10003; Link copied! / Enlace copiado!</div>
-    <button class="btn-cancel" style="width:100%;padding:13px;border-radius:10px;font-size:15px" onclick="closeAssignModal();render()">Done / Listo</button>
-  `;
-}
-function toast(msg) {
-  const el = document.createElement('div');
-  el.textContent = msg;
-  el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--g900);color:#fff;padding:9px 18px;border-radius:22px;font-size:13px;font-weight:500;z-index:400;white-space:nowrap';
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2500);
-}
-
-async function saveCheckin_cloud(blockId, data) {
-  await saveCheckin(blockId, data);
-}
-
-async function doCheckout(blockId, checkin) {
-  const block = BLOCKS[blockId];
-  if (!block) return;
-  const key = normalizeTime(checkin.time);
-  if (CHECKED_OUT.has(key) || checkin.checkout) { goHome(); return; }
-  const activeTasks = (block.assignedTasks || []).filter(t => t.startsWith('TASK:'));
-  if (activeTasks.length > 0) {
-    showCheckoutTaskModal(blockId, checkin, activeTasks);
-  } else {
-    await confirmCheckout(blockId, checkin, [], '');
-  }
-}
-
-// Store checkout context for modal submission
-let _checkoutBlockId = null;
-let _checkoutCheckin = null;
-
+// ── CHECKOUT WITH TASKS ────────────────────────────────────────────────────
 function showCheckoutTaskModal(blockId, checkin, tasks) {
   _checkoutBlockId = blockId;
   _checkoutCheckin = checkin;
@@ -2877,12 +2568,10 @@ function showCheckoutTaskModal(blockId, checkin, tasks) {
   const inner = modal.querySelector('.modal');
   const elapsed = ((new Date() - new Date(checkin.time)) / 3600000).toFixed(1);
   const taskItems = tasks.map((t, i) => {
-    const label = t.replace('TASK:', '').trim();
+    const label = t.replace('TASK:','').trim();
     return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #F3F4F6;cursor:pointer">' +
-      '<input type="checkbox" value="' + i + '" checked ' +
-        'style="width:20px;height:20px;flex-shrink:0;margin-top:2px;accent-color:#1B4332;cursor:pointer">' +
-      '<span style="font-size:14px;color:#111827;line-height:1.4">' + label + '</span>' +
-      '</label>';
+      '<input type="checkbox" value="' + i + '" checked style="width:20px;height:20px;flex-shrink:0;margin-top:2px;accent-color:#1B4332;cursor:pointer">' +
+      '<span style="font-size:14px;color:#111827;line-height:1.4">' + label + '</span></label>';
   }).join('');
   inner.innerHTML =
     '<div class="modal-handle"></div>' +
@@ -2892,17 +2581,14 @@ function showCheckoutTaskModal(blockId, checkin, tasks) {
       (checkin.foreman ? ' — ' + checkin.foreman : '') + ' · ' + elapsed + ' hrs on site</div>' +
     '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:8px">Which tasks were completed?</div>' +
     '<div id="checkout-task-list">' + taskItems + '</div>' +
-    '<div style="font-size:11px;color:#9CA3AF;margin:10px 0 12px">Checked tasks will be marked complete and removed from the block.</div>' +
-    '<div style="margin-bottom:14px">' +
-      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Notes / Notas <span style="font-weight:400;text-transform:none">(optional)</span></div>' +
-      '<textarea id="checkout-notes" placeholder="e.g. Completed rows 1-10 only, noticed irrigation leak on east side..." ' +
-        'style="width:100%;background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;color:#111827;resize:none;height:72px;outline:none;box-sizing:border-box"></textarea>' +
+    '<div style="margin-bottom:14px;margin-top:10px">' +
+      '<div style="font-size:12px;font-weight:700;text-transform:uppercase;color:#6B7280;margin-bottom:6px">Notes / Notas (optional)</div>' +
+      '<textarea id="checkout-notes" placeholder="e.g. Completed rows 1-10 only, noticed irrigation leak..." ' +
+        'style="width:100%;background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;resize:none;height:72px;outline:none;box-sizing:border-box"></textarea>' +
     '</div>' +
     '<div style="display:flex;gap:8px">' +
-      '<button onclick="closeCheckoutModal()" ' +
-        'style="flex:1;background:#F3F4F6;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;color:#374151">Cancel</button>' +
+      '<button onclick="closeCheckoutModal()" style="flex:1;background:#F3F4F6;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;color:#374151">Cancel</button>' +
       '<button onclick="submitCheckoutTasks()" style="flex:2;background:#991B1B;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;color:#fff">Confirm Checkout</button>' +
-        'style="flex:2;background:#991B1B;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;color:#fff">Confirm Checkout</button>' +
     '</div>';
   modal.classList.add('open');
 }
@@ -2911,10 +2597,10 @@ async function submitCheckoutTasks() {
   const blockId = _checkoutBlockId;
   const checkin = _checkoutCheckin;
   const checkboxes = document.querySelectorAll('#checkout-task-list input[type=checkbox]');
-  const notes = (document.getElementById('checkout-notes') || {}).value || '';
+  const notes = (document.getElementById('checkout-notes')||{}).value || '';
   const block = BLOCKS[blockId];
   if (!block) return;
-  const activeTasks = (block.assignedTasks || []).filter(t => t.startsWith('TASK:'));
+  const activeTasks = (block.assignedTasks||[]).filter(t => t.startsWith('TASK:'));
   const completedTasks = [];
   checkboxes.forEach((cb, i) => { if (cb.checked && activeTasks[i]) completedTasks.push(activeTasks[i]); });
   document.getElementById('modal-checkout-tasks').classList.remove('open');
@@ -2928,27 +2614,23 @@ async function confirmCheckout(blockId, checkin, completedTasks, notes) {
   CHECKED_OUT.add(key);
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  notes = notes || '';
   const elapsed = ((now - new Date(checkin.time)) / 3600000).toFixed(1);
-  // Mark checkin checked out locally
   checkin.checkout = now.toISOString();
   if (block.checkins) {
     block.checkins.forEach(c => { if (normalizeTime(c.time) === key) c.checkout = now.toISOString(); });
   }
-  // Remove completed tasks from active list
   const completedSet = new Set(completedTasks.map(t => t.trim()));
-  block.assignedTasks = (block.assignedTasks || []).filter(t => {
+  block.assignedTasks = (block.assignedTasks||[]).filter(t => {
     if (!t.startsWith('TASK:')) return true;
     return !completedSet.has(t.trim());
   });
-  // Add checkout log entry
-  notes = notes || '';
   const entry = now.toLocaleDateString() + ' ' + timeStr +
     ' - CHECK-OUT: ' + (checkin.crew||1) + ' worker' + ((checkin.crew||1)>1?'s':'') +
     (checkin.foreman ? ' - ' + checkin.foreman : '') + ' | ' + elapsed + ' hrs' +
     (completedTasks.length ? ' | Done: ' + completedTasks.map(t=>t.replace('TASK:','').trim()).join(', ') : '') +
     (notes ? ' | Notes: ' + notes : '');
   block.assignedTasks.unshift(entry);
-  // Save to Supabase
   if (cloudOk) {
     try {
       const {data: rows} = await sb.from('block_checkins').select('id')
@@ -2958,16 +2640,13 @@ async function confirmCheckout(blockId, checkin, completedTasks, notes) {
         await sb.from('block_checkins').update({checkout: now.toISOString()}).eq('id', rows[0].id);
       }
       for (const task of completedTasks) {
-        const label = task.replace('TASK:', '').trim();
+        const label = task.replace('TASK:','').trim();
         await sb.from('block_tasks').update({status:'completed',completed_at:now.toISOString()})
           .eq('block_id', blockId).eq('task', label).eq('status','pending');
       }
       await saveActivity(blockId, {
-        activity_type: 'Checkout', logged_by: checkin.foreman||'',
-        crew: checkin.crew||1,
-        notes: elapsed + ' hrs' +
-          (completedTasks.length ? ' | ' + completedTasks.length + ' task(s) completed' : '') +
-          (notes ? ' | ' + notes : '')
+        activity_type: 'Checkout', logged_by: checkin.foreman||'', crew: checkin.crew||1,
+        notes: elapsed + ' hrs' + (completedTasks.length ? ' | ' + completedTasks.length + ' task(s) completed' : '') + (notes ? ' | ' + notes : '')
       });
     } catch(e) { console.warn('Checkout error:', e); }
   }
@@ -2975,370 +2654,275 @@ async function confirmCheckout(blockId, checkin, completedTasks, notes) {
 }
 
 
-async function showActivityTabs() {
-  const modal = document.getElementById('modal-activity-tabs');
-  const inner = modal.querySelector('.modal');
+// ── TASK ASSIGNMENT MODAL ────────────────────────────────────────────────
+function getAssignModalHTML() {
+  return '<div class="modal-handle"></div>' +
+    '<h2>Assign Task / Asignar Tarea</h2>' +
+    '<label class="form-label">Task Description / Descripcion de la Tarea</label>' +
+    '<textarea class="form-input" id="assign-task-input" style="height:90px" placeholder="e.g. Irrigate rows 1-20 / Regar filas 1-20"></textarea>' +
+    '<div style="margin-bottom:12px">' +
+      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--tx3);margin-bottom:8px">Quick tasks / Tareas rapidas</div>' +
+      '<span class="assign-tag" data-task="Irrigate full block / Regar bloque completo" onclick="quickTask(this.dataset.task)">Irrigate / Regar</span>' +
+      '<span class="assign-tag" data-task="Apply spray treatment / Aplicar tratamiento de fumigacion" onclick="quickTask(this.dataset.task)">Spray / Fumigar</span>' +
+      '<span class="assign-tag" data-task="Prune trees / Podar arboles" onclick="quickTask(this.dataset.task)">Prune / Podar</span>' +
+      '<span class="assign-tag" data-task="Apply fertilizer / Aplicar fertilizante" onclick="quickTask(this.dataset.task)">Fertilize / Fertilizar</span>' +
+      '<span class="assign-tag" data-task="General inspection / Inspeccion general" onclick="quickTask(this.dataset.task)">Inspect / Inspeccionar</span>' +
+      '<span class="assign-tag" onclick="checkPHIAndHarvest()">Harvest / Cosechar</span>' +
+      '<span class="assign-tag" data-task="Equipment repair needed / Reparacion de equipo necesaria" onclick="quickTask(this.dataset.task)">Repair / Reparar</span>' +
+    '</div>' +
+    '<label class="form-label" style="margin-top:4px">Scheduled Date <span style="font-weight:400;color:var(--tx3)">(optional)</span></label>' +
+    '<input class="form-input" id="assign-task-date" type="date" style="margin-bottom:12px">' +
+    '<div class="form-actions">' +
+      '<button class="btn-cancel" onclick="closeAssignModal()">Cancel / Cancelar</button>' +
+      '<button class="btn-submit" onclick="submitAssignTask()">Assign / Asignar</button>' +
+    '</div>';
+}
 
-  // Activity types to show as tabs
-  const ACTIVITY_TYPES = [
-    {key:'all',           label:'All',       icon:'&#128085;', color:'#374151'},
-    {key:'Task Assigned', label:'Tasks',     icon:'&#128203;', color:'#D97706'},
-    {key:'Spray',         label:'Spray',     icon:'&#128137;', color:'#991B1B'},
-    {key:'Irrigation',    label:'Irrigate',  icon:'&#128167;', color:'#1D4ED8'},
-    {key:'Harvest',       label:'Harvest',   icon:'&#129362;', color:'#B45309'},
-    {key:'Pruning',       label:'Prune',     icon:'&#9985;',   color:'#7C3AED'},
-    {key:'Check-In',      label:'Check-In',  icon:'&#128205;', color:'#16A34A'},
-    {key:'Checkout',      label:'Check-Out', icon:'&#9654;',   color:'#6B7280'},
-  ];
+function openAssignModal() {
+  const modal = document.querySelector('#modal-assign .modal');
+  if (modal) modal.innerHTML = getAssignModalHTML();
+  document.getElementById('modal-assign').classList.add('open');
+}
 
-  let allActivities = [];
-  let currentTab = 'all';
+// ── TASK ASSIGNMENT FUNCTIONS ────────────────────────────────────────────
+function quickTask(text) {
+  document.getElementById('assign-task-input').value = text;
+}
 
-  // Load from Supabase
+let _promptTask = null, _promptDate = null;
+
+async function saveTaskAndShowShare(task, block) {
+  const entry = 'TASK: ' + task;
+  block.assignedTasks.push(entry);
+  // Save to Supabase
   if (cloudOk) {
     try {
-      const since30 = new Date(Date.now() - 30*24*60*60*1000).toISOString();
-      const [actsRes, checkinsRes, tasksRes] = await Promise.all([
-        sb.from('block_activities').select('*').gte('created_at', since30).order('created_at', {ascending: false}),
-        sb.from('block_checkins').select('*').gte('created_at', since30).order('created_at', {ascending: false}),
-        sb.from('block_tasks').select('*').gte('created_at', since30).order('created_at', {ascending: false})
-      ]);
-
-      // Activities (spray, irrigation, checkout, etc.)
-      (actsRes.data||[]).forEach(a => {
-        const b = BLOCKS[a.block_id];
-        if (!b) return;
-        allActivities.push({
-          type: a.activity_type || 'Other',
-          blockId: a.block_id,
-          displayId: b.displayId,
-          ranch: b.ranch, variety: b.variety, acreage: b.acreage,
-          detail: a.chemical ? a.chemical + ' · REI: ' + (a.rei_days||0) + 'h'
-                : a.irrig_type ? a.irrig_type + (a.dry_days ? ' · Dry in ' + a.dry_days + 'd' : '')
-                : a.notes || '',
-          worker: a.logged_by || '',
-          time: new Date(a.created_at)
-        });
-      });
-
-      // Check-ins and checkouts
-      (checkinsRes.data||[]).forEach(c => {
-        const b = BLOCKS[c.block_id];
-        if (!b) return;
-        const elapsed = c.checkout
-          ? ((new Date(c.checkout) - new Date(c.created_at))/3600000).toFixed(1) + ' hrs'
-          : 'Active';
-        allActivities.push({
-          type: 'Check-In', blockId: c.block_id,
-          displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
-          detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') +
-            (c.foreman ? ' · ' + c.foreman : '') + ' · ' + elapsed,
-          worker: c.foreman || '',
-          time: new Date(c.created_at)
-        });
-        if (c.checkout) {
-          allActivities.push({
-            type: 'Checkout', blockId: c.block_id,
-            displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
-            detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') +
-              (c.foreman ? ' · ' + c.foreman : '') + ' · ' + elapsed,
-            worker: c.foreman || '',
-            time: new Date(c.checkout)
-          });
-        }
-      });
-
-      // Assigned tasks
-      (tasksRes.data||[]).forEach(t => {
-        const b = BLOCKS[t.block_id];
-        if (!b) return;
-        allActivities.push({
-          type: t.status === 'completed' ? 'Task Completed' : 'Task Assigned',
-          blockId: t.block_id,
-          displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
-          detail: t.task + (t.status === 'completed' ? ' · Completed' : ' · Pending'),
-          worker: '',
-          time: new Date(t.status === 'completed' && t.completed_at ? t.completed_at : t.created_at)
-        });
-      });
-
-    } catch(e) { console.warn('Activity tabs error:', e); }
+      const label = task.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/, '').trim();
+      await sb.from('block_tasks').insert({block_id: currentBlockId, task: label, status: 'pending'});
+    } catch(e) { console.warn('Save task error:', e); }
   }
+  // Show share confirmation in modal
+  const modal = document.querySelector('#modal-assign .modal');
+  const variety = lang==='es' ? block.varietyEs : block.variety;
+  const ranch = lang==='es' ? block.ranchEs : block.ranch;
+  const label = task.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/, '').trim();
+  modal.innerHTML =
+    '<div class="modal-handle"></div>' +
+    '<div style="text-align:center;margin-bottom:18px">' +
+      '<div style="font-size:36px;margin-bottom:8px">&#10003;</div>' +
+      '<div style="font-size:18px;font-weight:700;color:var(--g800);margin-bottom:4px">Task Assigned / Tarea Asignada</div>' +
+      '<div style="font-size:13px;color:var(--tx3);line-height:1.5">' + block.displayId + ' &mdash; ' + variety + '<br>' + ranch + '</div>' +
+    '</div>' +
+    '<div style="background:var(--g50);border:1px solid var(--g100);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--g800)">' +
+      '<strong>Task:</strong> ' + label +
+    '</div>' +
+    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);margin-bottom:10px">Send to Worker / Enviar al Trabajador</div>' +
+    '<button class="share-btn share-btn-wa" style="margin-bottom:12px" id="sts-wa-btn">' +
+      '<span class="share-btn-icon">&#128172;</span><span>Send via WhatsApp</span>' +
+    '</button>' +
+    '<button class="share-btn" style="margin-bottom:16px" id="sts-copy-btn">' +
+      '<span class="share-btn-icon">&#128279;</span><span>Copy Work Order</span>' +
+    '</button>' +
+    '<div id="assign-link-copied" style="display:none;text-align:center;font-size:12px;color:var(--g600);margin-bottom:12px">&#10003; Copied!</div>' +
+    '<button class="btn-cancel" style="width:100%;padding:13px;border-radius:10px;font-size:15px" onclick="closeAssignModal();render()">Done / Listo</button>';
+  // Wire up share buttons after innerHTML set
+  setTimeout(function() {
+    const waBtn = document.getElementById('sts-wa-btn');
+    const copyBtn = document.getElementById('sts-copy-btn');
+    if (waBtn) waBtn.onclick = function() { shareWhatsApp(currentBlockId, BLOCKS[currentBlockId]); };
+    if (copyBtn) copyBtn.onclick = function() { copyShareLink(currentBlockId); };
+  }, 50);
+}
 
-  // Supplement with local in-memory data not yet in Supabase
-  const existingKeys = new Set(allActivities.map(a => normalizeTime(a.time.toISOString()) + a.blockId + a.type));
+function showIrrigPrompt(task, block) {
+  _promptTask = task;
+  _promptDate = (document.getElementById('assign-task-date') || {}).value || '';
+  const today = new Date().toISOString().split('T')[0];
+  const modal = document.querySelector('#modal-assign .modal');
+  modal.innerHTML =
+    '<div class="modal-handle"></div>' +
+    '<h2>&#128167; Irrigation Details / Detalles de Riego</h2>' +
+    '<div style="background:var(--amber-bg);border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--amber)">&#9888; Logging irrigation will mark this field <strong>WET</strong></div>' +
+    '<label class="form-label">Irrigation Type / Tipo de Riego</label>' +
+    '<select class="form-input" id="prompt-irrig-type">' +
+      '<option>Flood / Inundacion</option>' +
+      '<option>Drip / Goteo</option>' +
+      '<option>Micro-sprinkler / Micro-aspersor</option>' +
+      '<option>Sprinkler / Aspersor</option>' +
+      '<option>Furrow / Surco</option>' +
+    '</select>' +
+    '<label class="form-label">Date / Fecha</label>' +
+    '<input class="form-input" id="prompt-irrig-date" type="date" value="' + today + '">' +
+    '<label class="form-label">Est. Days to Dry / Dias para Secar</label>' +
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">' +
+      '<input class="form-input" id="prompt-dry-days" type="number" min="1" max="14" value="3" style="margin-bottom:0;flex:1">' +
+      '<span style="font-size:12px;color:var(--tx3);white-space:nowrap">days / dias</span>' +
+    '</div>' +
+    '<div class="form-actions">' +
+      '<button class="btn-cancel" onclick="_skipIrrigPrompt()">Skip / Omitir</button>' +
+      '<button class="btn-submit" onclick="saveIrrigAndTask()">Save &amp; Assign</button>' +
+    '</div>';
+}
 
-  Object.entries(BLOCKS).forEach(([id, b]) => {
-    // Add local TASK entries
-    (b.assignedTasks||[]).forEach(entry => {
-      if (!entry.startsWith('TASK:')) return;
-      const label = entry.replace('TASK:','').trim();
-      const labelLower = label.toLowerCase();
-      const key = 'local-' + id + label;
-      if (existingKeys.has(key)) return;
+function showSprayPrompt(task, block) {
+  _promptTask = task;
+  _promptDate = (document.getElementById('assign-task-date') || {}).value || '';
+  const today = new Date().toISOString().split('T')[0];
+  const chemOptions = CHEMICALS.map(c =>
+    '<option value="' + c.name + '" data-rei="' + c.rei + '" data-phi="' + (c.phi||0) + '">' +
+    c.name + (c.rei > 0 ? ' (' + c.rei + 'h REI' + (c.phi > 0 ? ', ' + c.phi + 'd PHI' : '') + ')' : '') +
+    '</option>'
+  ).join('');
+  const modal = document.querySelector('#modal-assign .modal');
+  modal.innerHTML =
+    '<div class="modal-handle"></div>' +
+    '<h2>&#128137; Spray Details / Detalles de Fumigacion</h2>' +
+    '<div style="background:var(--red-bg);border:1px solid #FECACA;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--red)">&#9888; Logging spray will set REI restriction</div>' +
+    '<label class="form-label">Chemical / Quimico</label>' +
+    '<select class="form-input" id="prompt-chemical" onchange="onPromptChemChange()">' +
+      '<option value="">Select / Seleccionar</option>' + chemOptions +
+    '</select>' +
+    '<label class="form-label">REI Hours / Horas REI</label>' +
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
+      '<input class="form-input" id="prompt-rei" type="number" min="0" max="72" placeholder="e.g. 24" style="margin-bottom:0;flex:1">' +
+      '<span style="font-size:12px;color:var(--tx3);white-space:nowrap">hours / horas</span>' +
+    '</div>' +
+    '<div id="prompt-phi-info" style="font-size:12px;color:#B45309;font-weight:600;padding:6px 10px;background:#FFFBEB;border-radius:8px;margin-bottom:10px;display:none"></div>' +
+    '<label class="form-label">Spray Date / Fecha</label>' +
+    '<input class="form-input" id="prompt-spray-date" type="date" value="' + today + '">' +
+    '<div class="form-actions">' +
+      '<button class="btn-cancel" onclick="_skipSprayPrompt()">Skip / Omitir</button>' +
+      '<button class="btn-submit" onclick="saveSprayAndTask()">Save &amp; Assign</button>' +
+    '</div>';
+}
 
-      // Detect activity type from task label
-      let actType = 'Task Assigned';
-      if (labelLower.includes('irrigat') || labelLower.includes('regar') || labelLower.includes('riego')) actType = 'Irrigation';
-      else if (labelLower.includes('spray') || labelLower.includes('fumig') || labelLower.includes('chemical')) actType = 'Spray';
-      else if (labelLower.includes('harvest') || labelLower.includes('cosech') || labelLower.includes('pick')) actType = 'Harvest';
-      else if (labelLower.includes('prun') || labelLower.includes('podar') || labelLower.includes('trim')) actType = 'Pruning';
-      else if (labelLower.includes('fertil') || labelLower.includes('abono')) actType = 'Fertilizer';
-
-      allActivities.push({
-        type: actType,
-        blockId: id,
-        displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
-        detail: label + ' · Pending (local)',
-        worker: '', time: new Date()
-      });
-      existingKeys.add(key);
-    });
-
-    // Add local irrigation status if block has it
-    if (b.lastIrrigationDate && b.lastIrrigationType) {
-      const key = 'local-irrig-' + id + b.lastIrrigationDate;
-      if (!existingKeys.has(key)) {
-        allActivities.push({
-          type: 'Irrigation',
-          blockId: id,
-          displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
-          detail: b.lastIrrigationType + ' · Dry in ' + (b.dryDays||3) + 'd',
-          worker: '', time: new Date(b.lastIrrigationDate)
-        });
-        existingKeys.add(key);
-      }
-    }
-
-    // Add local spray status if block has it
-    if (b.lastSprayDate && b.lastChemical) {
-      const key = 'local-spray-' + id + b.lastSprayDate;
-      if (!existingKeys.has(key)) {
-        allActivities.push({
-          type: 'Spray',
-          blockId: id,
-          displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
-          detail: b.lastChemical + ' · REI: ' + (b.reiDays||0) + 'h',
-          worker: '', time: new Date(b.lastSprayDate)
-        });
-        existingKeys.add(key);
-      }
-    }
-
-    // Add local checkins
-    (b.checkins||[]).forEach(c => {
-      const key = 'local-checkin-' + id + normalizeTime(c.time);
-      if (existingKeys.has(key)) return;
-      const elapsed = c.checkout
-        ? ((new Date(c.checkout) - new Date(c.time))/3600000).toFixed(1) + ' hrs'
-        : 'Active';
-      allActivities.push({
-        type: 'Check-In', blockId: id,
-        displayId: b.displayId, ranch: b.ranch, variety: b.variety, acreage: b.acreage,
-        detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') +
-          (c.foreman ? ' · ' + c.foreman : '') + ' · ' + elapsed,
-        worker: c.foreman||'', time: new Date(c.time)
-      });
-      existingKeys.add(key);
-    });
-  });
-
-  function renderTabContent(tab) {
-    const filtered = tab === 'all' ? allActivities
-      : tab === 'Task Assigned' ? allActivities.filter(a => a.type === 'Task Assigned' || a.type === 'Task Completed')
-      : allActivities.filter(a => a.type === tab);
-    if (!filtered.length) {
-      return '<div style="text-align:center;padding:40px 20px;color:#9CA3AF">No ' + tab + ' activities in last 30 days</div>';
-    }
-    const typeColors = {
-      'Spray':'#991B1B','Irrigation':'#1D4ED8','Harvest':'#B45309','Pruning':'#7C3AED',
-      'Fertilizer':'#6B7280','Check-In':'#16A34A','Checkout':'#6B7280',
-      'Task Assigned':'#D97706','Task Completed':'#16A34A','Other':'#374151'
-    };
-    const typeIcons2 = {
-      'Spray':'&#128137;','Irrigation':'&#128167;','Harvest':'&#129362;','Pruning':'&#9985;',
-      'Fertilizer':'&#129501;','Check-In':'&#128205;','Checkout':'&#9654;',
-      'Task Assigned':'&#128203;','Task Completed':'&#10003;','Other':'&#128085;'
-    };
-    return filtered.map(a => {
-      const color = typeColors[a.type] || '#374151';
-      const timeStr = a.time.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' +
-        a.time.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-      return '<div data-blockid="' + a.blockId + '" onclick="_openBlock(this.dataset.blockid)" style="display:flex;gap:12px;padding:11px 0;border-bottom:1px solid #F3F4F6;cursor:pointer;align-items:flex-start">' +
-        '<div style="flex-shrink:0;width:34px;height:34px;border-radius:50%;background:' + color + '20;border:2px solid ' + color + ';display:flex;align-items:center;justify-content:center;font-size:14px;margin-top:2px">' +
-          (typeIcons2[a.type] || '&#128085;') +
-        '</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">' +
-            '<span style="font-size:12px;font-weight:700;color:' + color + '">' + a.type + '</span>' +
-            '<span style="font-size:11px;color:#9CA3AF;white-space:nowrap;margin-left:8px">' + timeStr + '</span>' +
-          '</div>' +
-          '<div style="font-size:13px;font-weight:600;color:#111827">' + a.displayId + ' · ' + (a.variety||'') + '</div>' +
-          '<div style="font-size:12px;color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + a.ranch + (a.detail ? ' · ' + a.detail : '') + '</div>' +
-        '</div>' +
-      '</div>';
-    }).join('');
+function onPromptChemChange() {
+  var sel = document.getElementById('prompt-chemical');
+  if (!sel) return;
+  var opt = sel.options[sel.selectedIndex];
+  var r = opt ? opt.dataset.rei : undefined;
+  if (r !== undefined) {
+    var reiEl = document.getElementById('prompt-rei');
+    if (reiEl) reiEl.value = r;
   }
-
-  function buildTabs() {
-    return ACTIVITY_TYPES.map(t => {
-      const count = t.key === 'all' ? allActivities.length : allActivities.filter(a => a.type === t.key).length;
-      const isActive = t.key === currentTab;
-      return '<button data-tab="' + t.key + '" onclick="_actTab(this.dataset.tab)" style="' +
-        'display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:16px;border:none;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0;' +
-        (isActive ? 'background:' + t.color + ';color:#fff;' : 'background:#F3F4F6;color:#374151;') +
-        '">' + t.icon + ' ' + t.label + (count > 0 ? ' <span style="opacity:.7;font-size:10px">(' + count + ')</span>' : '') + '</button>';
-    }).join('');
+  var p = opt ? opt.dataset.phi : undefined;
+  var phiEl = document.getElementById('prompt-phi-info');
+  if (phiEl && p !== undefined) {
+    if (parseInt(p) > 0) {
+      phiEl.textContent = 'PHI: ' + p + ' days before harvest';
+      phiEl.style.display = 'block';
+    } else {
+      phiEl.style.display = 'none';
+    }
   }
+}
 
-  window._openBlock = function(blockId) {
-  document.getElementById('modal-activity-tabs').classList.remove('open');
-  window.location.hash = blockId;
-  render();
+window._skipIrrigPrompt = function() {
+  const taskWithDate = _promptDate ? '[' + _promptDate + '] ' + _promptTask : _promptTask;
+  saveTaskAndShowShare(taskWithDate, BLOCKS[currentBlockId]);
 };
-window._actTab = function(tab) {
-    currentTab = tab;
-    document.getElementById('act-tabs-bar').innerHTML = buildTabs();
-    document.getElementById('act-tabs-content').innerHTML = renderTabContent(tab);
-  };
 
-  inner.innerHTML =
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0">' +
-      '<div style="font-size:18px;font-weight:800;color:#111827">&#128085; Ranch Activities</div>' +
-      '<button onclick="closeActivityModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9CA3AF">&#x2715;</button>' +
-    '</div>' +
-    '<div style="position:relative;flex-shrink:0">' +
-      '<div id="act-tabs-bar" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-right:28px">' + buildTabs() + '</div>' +
-      '<div style="position:absolute;right:0;top:0;height:calc(100% - 8px);width:28px;background:linear-gradient(to right,transparent,#fff);pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:2px"><span style="font-size:14px;color:#9CA3AF">&#8250;</span></div>' +
-    '</div>' +
-    '<div id="act-tabs-content" style="overflow-y:auto;flex:1">' + renderTabContent('all') + '</div>';
+window._skipSprayPrompt = function() {
+  const taskWithDate = _promptDate ? '[' + _promptDate + '] ' + _promptTask : _promptTask;
+  saveTaskAndShowShare(taskWithDate, BLOCKS[currentBlockId]);
+};
 
-  modal.classList.add('open');
-}
-
-function refreshDailyReport() {
-  const days = parseInt(document.getElementById('daily-date-range').value);
-  showDailySummary(days);
-}
-
-let _map = null;
-
-function getStatusColor(block) {
-  const s = getBlockStatus(block);
-  if (s.cls === 'status-red')    return '#EF4444';
-  if (s.cls === 'status-orange') return '#F97316';
-  if (s.cls === 'status-amber')  return '#D97706';
-  if (s.cls === 'status-yellow') return '#EAB308';
-  return '#22C55E';
-}
-
-function makePin(color) {
-  return L.divIcon({
-    className: '',
-    html: '<div style="width:16px;height:16px;border-radius:50%;background:' + color + ';border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)"></div>',
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
-    popupAnchor: [0, -10]
+async function saveIrrigAndTask() {
+  const block = BLOCKS[currentBlockId];
+  const irrigType = document.getElementById('prompt-irrig-type').value;
+  const irrigDate = document.getElementById('prompt-irrig-date').value;
+  const dryDays = parseInt(document.getElementById('prompt-dry-days').value) || 3;
+  if (!irrigDate) { alert('Please enter irrigation date.'); return; }
+  block.lastIrrigationType = irrigType;
+  block.lastIrrigationDate = irrigDate;
+  block.dryDays = dryDays;
+  block.lastIrrigation = new Date(irrigDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  await saveActivity(currentBlockId, {
+    activity_type: 'Irrigation', irrig_type: irrigType,
+    irrig_date: irrigDate, dry_days: dryDays,
+    notes: _promptTask ? _promptTask.replace('TASK:','').trim() : ''
   });
+  const taskWithDate = _promptDate ? '[' + _promptDate + '] ' + _promptTask : _promptTask;
+  saveTaskAndShowShare(taskWithDate, block);
 }
 
-async function showMapView() {
-  document.getElementById('map-container').style.display = 'flex';
-  document.body.style.overflow = 'hidden';
+async function saveSprayAndTask() {
+  const block = BLOCKS[currentBlockId];
+  const chem = document.getElementById('prompt-chemical').value;
+  const rei = parseInt(document.getElementById('prompt-rei').value) || 0;
+  const sprayDate = document.getElementById('prompt-spray-date').value;
+  if (!chem) { alert('Please select a chemical.'); return; }
+  if (!sprayDate) { alert('Please enter spray date.'); return; }
+  const chemData = CHEMICALS.find(c => c.name === chem) || {phi:0};
+  block.lastChemical = chem;
+  block.reiDays = rei;
+  block.lastSprayPhi = chemData.phi;
+  block.lastSprayDate = sprayDate;
+  block.lastSpray = new Date(sprayDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  await saveActivity(currentBlockId, {
+    activity_type: 'Spray', chemical: chem,
+    rei_days: rei, spray_date: sprayDate,
+    notes: _promptTask ? _promptTask.replace('TASK:','').trim() : ''
+  });
+  const taskWithDate = _promptDate ? '[' + _promptDate + '] ' + _promptTask : _promptTask;
+  saveTaskAndShowShare(taskWithDate, block);
+}
 
-  // Load latest statuses from cloud before plotting pins
-  if (cloudOk) {
-    try { await loadAllBlockStatuses(); } catch(e) {}
+async function submitAssignTask() {
+  const task = document.getElementById('assign-task-input').value.trim();
+  if (!task) { alert('Please enter a task description.'); return; }
+  const scheduledDate = (document.getElementById('assign-task-date') || {}).value || '';
+  const block = BLOCKS[currentBlockId];
+  if (!block) return;
+  const taskLower = task.toLowerCase();
+  const isIrrig = taskLower.includes('irrigat') || taskLower.includes('regar') || taskLower.includes('riego');
+  const isSpray = taskLower.includes('spray') || taskLower.includes('fumig') || taskLower.includes('chemical');
+  if (isIrrig) { showIrrigPrompt(task, block); return; }
+  if (isSpray) { showSprayPrompt(task, block); return; }
+  const taskWithDate = scheduledDate ? '[' + scheduledDate + '] ' + task : task;
+  saveTaskAndShowShare(taskWithDate, block);
+}
+
+// ── CHECK-IN ──────────────────────────────────────────────────────────────
+async function doCheckin(blockId) {
+  const block = BLOCKS[blockId];
+  if (!block) return;
+  const crewInput = document.getElementById('checkin-crew');
+  const foremanInput = document.getElementById('checkin-foreman');
+  const crew = parseInt((crewInput || {}).value || 1);
+  const foreman = ((foremanInput || {}).value || '').trim();
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+
+  function saveCheckin(lat, lng, accuracy) {
+    const checkin = { time: now.toISOString(), crew, foreman, lat, lng, accuracy };
+    block.checkins.push(checkin);
+    CHECKED_OUT.delete(normalizeTime(now.toISOString()));
+    const entry = now.toLocaleDateString() + ' ' + timeStr +
+      ' - CHECK-IN: ' + crew + ' worker' + (crew > 1 ? 's' : '') +
+      (foreman ? ' - Foreman: ' + foreman : '') +
+      (lat ? ' (GPS: ' + lat + ', ' + lng + ')' : '');
+    block.assignedTasks.unshift(entry);
+    saveCheckin_cloud(blockId, {crew, foreman, lat, lng, accuracy});
+    render();
   }
 
-  // Init map once
-  if (!_map) {
-    _map = L.map('map-el', {zoomControl: true}).setView([36.50, -119.26], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 18
-    }).addTo(_map);
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => saveCheckin(pos.coords.latitude.toFixed(6), pos.coords.longitude.toFixed(6), Math.round(pos.coords.accuracy)),
+      () => saveCheckin(null, null, null),
+      {timeout: 8000}
+    );
   } else {
-    _map.invalidateSize();
+    saveCheckin(null, null, null);
   }
-
-  // Clear existing markers
-  _map.eachLayer(layer => {
-    if (layer instanceof L.Marker) _map.removeLayer(layer);
-  });
-
-  // Add a marker for each block
-  const bounds = [];
-  Object.entries(BLOCKS).forEach(([id, b]) => {
-    try {
-    if (!b.lat || !b.lng) return;
-    const lat = parseFloat(b.lat);
-    const lng = parseFloat(b.lng);
-    if (isNaN(lat) || isNaN(lng)) return;
-    if (!b.assignedTasks) b.assignedTasks = [];
-    if (!b.checkins) b.checkins = [];
-    const color = getStatusColor(b);
-    const status = getBlockStatus(b);
-    const tpa = calcTreesPerAcre(b.spacing);
-    const total = calcTotalTrees(b.spacing, b.acreage);
-    const marker = L.marker([lat, lng], {icon: makePin(color)});
-    marker.bindPopup(
-      '<div style="font-family:DM Sans,sans-serif;min-width:200px">' +
-        '<div style="background:#1B4332;color:#fff;padding:8px 10px;margin:-10px -10px 8px;border-radius:4px 4px 0 0">' +
-          '<div style="font-size:13px;font-weight:800">' + b.displayId + '</div>' +
-          '<div style="font-size:11px;opacity:.8">' + b.ranch + '</div>' +
-        '</div>' +
-        '<div style="font-size:13px;font-weight:600;color:#111827;margin-bottom:4px">' + b.variety + '</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px">' +
-          '<div style="font-size:11px;color:#6B7280">Acreage: <strong style="color:#111827">' + b.acreage + ' ac</strong></div>' +
-          '<div style="font-size:11px;color:#6B7280">Trees/acre: <strong style="color:#111827">' + tpa + '</strong></div>' +
-          '<div style="font-size:11px;color:#6B7280">Est. trees: <strong style="color:#111827">' + total + '</strong></div>' +
-          '<div style="font-size:11px;color:#6B7280">Planted: <strong style="color:#111827">' + b.plantYear + '</strong></div>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px">' +
-          '<div style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></div>' +
-          '<span style="font-size:11px;font-weight:700;color:#374151">' + status.label + '</span>' +
-        '</div>' +
-        '<button data-blockid="' + id + '" onclick="_openMapBlock(this.dataset.blockid)" ' +
-          'style="width:100%;background:#1B4332;color:#fff;border:none;border-radius:6px;padding:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">' +
-          '&#128205; Open Block Page' +
-        '</button>' +
-      '</div>'
-    , {maxWidth: 240});
-    marker.addTo(_map);
-    bounds.push([lat, lng]);
-    } catch(e) { console.warn('Marker error for', id, e); }
-  });
-
-  // Fit map to all markers
-  if (bounds.length > 0) {
-    _map.fitBounds(bounds, {padding: [30, 30]});
-  }
-
-  // Invalidate size after display
-  setTimeout(() => _map.invalidateSize(), 100);
 }
 
-window._openMapBlock = function(blockId) {
-  document.getElementById('map-container').style.display = 'none';
-  document.body.style.overflow = '';
-  window.location.hash = blockId;
-  render();
-};
-
-function showGrid() {
-  document.getElementById('map-container').style.display = 'none';
-  document.body.style.overflow = '';
-}
-
-// ── SCHEDULE ──────────────────────────────────────────────────────────────
+// ── SCHEDULE ─────────────────────────────────────────────────────────────
 let _scheduleWeekOffset = 0;
-let _dragTask = null;
-let _dragBlockId = null;
-let _dragDate = null;
-
-// Scheduled tasks: { blockId: { 'YYYY-MM-DD': [taskStrings] } }
+let _dragTask = null, _dragBlockId = null, _dragDate = null;
 let SCHEDULED = {};
+let _schBlockId = null, _schDateStr = null;
 
 function getWeekDates(offset) {
   const now = new Date();
@@ -3346,29 +2930,23 @@ function getWeekDates(offset) {
   const monday = new Date(now);
   monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
   monday.setHours(0,0,0,0);
-  return Array.from({length: 7}, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return d;
-  });
+  return Array.from({length:7}, (_,i) => { const d = new Date(monday); d.setDate(monday.getDate()+i); return d; });
 }
 
-function dateKey(d) {
-  return d.toISOString().split('T')[0];
-}
+function dateKey(d) { return d.toISOString().split('T')[0]; }
 
 function getTaskChipClass(task) {
   const t = task.toLowerCase();
   if (t.includes('harvest') || t.includes('cosech') || t.includes('pick')) return 'chip-harvest';
-  if (t.includes('spray') || t.includes('fumig') || t.includes('chemical')) return 'chip-spray';
-  if (t.includes('irrigat') || t.includes('regar') || t.includes('riego')) return 'chip-irrigate';
+  if (t.includes('spray') || t.includes('fumig')) return 'chip-spray';
+  if (t.includes('irrigat') || t.includes('regar')) return 'chip-irrigate';
   if (t.includes('prun') || t.includes('podar')) return 'chip-prune';
   return 'chip-default';
 }
 
 function getTaskIcon(task) {
   const t = task.toLowerCase();
-  if (t.includes('harvest') || t.includes('cosech') || t.includes('pick')) return '&#129362;';
+  if (t.includes('harvest') || t.includes('cosech')) return '&#129362;';
   if (t.includes('spray') || t.includes('fumig')) return '&#128137;';
   if (t.includes('irrigat') || t.includes('regar')) return '&#128167;';
   if (t.includes('prun') || t.includes('podar')) return '&#9985;';
@@ -3377,42 +2955,22 @@ function getTaskIcon(task) {
 
 function checkScheduleConflicts(blockId, dateStr, tasks) {
   const block = BLOCKS[blockId];
-  if (!block) return [];
+  if (!block || !tasks.length) return [];
   const conflicts = [];
   const date = new Date(dateStr);
-
   tasks.forEach(task => {
-    const t = task.toLowerCase();
-    const isHarvest = t.includes('harvest') || t.includes('cosech') || t.includes('pick');
-    const isWork = true;
-
-    // REI conflict — work scheduled during active REI
-    if (block.lastSprayDate && block.reiDays && isWork) {
+    const isHarvest = task.toLowerCase().includes('harvest') || task.toLowerCase().includes('cosech');
+    if (block.lastSprayDate && block.reiDays) {
       const sprayDate = new Date(block.lastSprayDate);
       const reiExpiry = new Date(sprayDate.getTime() + parseInt(block.reiDays) * 3600000);
-      if (date >= sprayDate && date <= reiExpiry) {
-        conflicts.push('REI active until ' + reiExpiry.toLocaleDateString());
-      }
+      if (date >= sprayDate && date <= reiExpiry) conflicts.push('REI active until ' + reiExpiry.toLocaleDateString());
     }
-
-    // PHI conflict — harvest during PHI window
     if (isHarvest && block.lastSprayDate && block.lastSprayPhi) {
       const sprayDate = new Date(block.lastSprayDate);
       const phiExpiry = new Date(sprayDate.getTime() + parseInt(block.lastSprayPhi) * 86400000);
-      if (date < phiExpiry) {
-        conflicts.push('PHI active — harvest not allowed until ' + phiExpiry.toLocaleDateString());
-      }
+      if (date < phiExpiry) conflicts.push('PHI — harvest not allowed until ' + phiExpiry.toLocaleDateString());
     }
   });
-
-  // Double-booking same block same day
-  const dayTasks = (SCHEDULED[blockId] && SCHEDULED[blockId][dateStr]) || [];
-  if (dayTasks.length > 0 && tasks.length > 0) {
-    const allTasks = [...dayTasks, ...tasks];
-    const types = new Set(allTasks.map(t => getTaskChipClass(t)));
-    if (types.size > 1) conflicts.push('Multiple task types same day');
-  }
-
   return conflicts;
 }
 
@@ -3421,493 +2979,312 @@ function renderSchedule() {
   const today = dateKey(new Date());
   const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-  // Collect all blocks with scheduled tasks OR active tasks
-  const blocksToShow = Object.entries(BLOCKS).filter(([id, b]) => {
-    const hasScheduled = SCHEDULED[id] && Object.values(SCHEDULED[id]).some(t => t.length > 0);
-    const hasActive = (b.assignedTasks||[]).some(t => t.startsWith('TASK:'));
+  const blocksToShow = Object.entries(BLOCKS).filter(([id,b]) => {
+    const hasScheduled = SCHEDULED[id] && Object.values(SCHEDULED[id]).some(t=>t.length>0);
+    const hasActive = (b.assignedTasks||[]).some(t=>t.startsWith('TASK:'));
     return hasScheduled || hasActive;
   });
-
-  // Week header
-  const startLabel = months[dates[0].getMonth()] + ' ' + dates[0].getDate();
-  const endLabel = months[dates[6].getMonth()] + ' ' + dates[6].getDate() + ', ' + dates[6].getFullYear();
-
-  // Build grid columns: label + 7 days
-  const gridStyle = 'grid-template-columns: 140px repeat(7, 1fr)';
-
-  // Column headers
-  const colHeaders = '<div class="sch-row-label sch-col-header" style="background:var(--g900)"><span style="font-size:11px;color:var(--g200)">Block / Task</span></div>' +
-    dates.map((d, i) => {
-      const dk = dateKey(d);
-      const isToday = dk === today;
-      return '<div class="sch-col-header ' + (isToday ? 'sch-col-today' : '') + '">' +
-        '<div class="sch-col-day">' + days[i] + '</div>' +
-        '<div class="sch-col-date">' + months[d.getMonth()] + ' ' + d.getDate() + (isToday ? ' ✦' : '') + '</div>' +
-      '</div>';
-    }).join('');
-
-  // Rows
-  const rows = blocksToShow.map(([blockId, b]) => {
-    const activeTasks = (b.assignedTasks||[]).filter(t => t.startsWith('TASK:')).map(t => t.replace('TASK:','').trim());
-    const variety = lang==='es' ? b.varietyEs : b.variety;
-    const ranch = lang==='es' ? b.ranchEs : b.ranch;
-    const varShort = variety.length > 16 ? variety.substring(0,14)+'..' : variety;
-
-    const rowLabel = '<div class="sch-row-label" data-blockid="' + blockId + '" onclick="_openBlock(this.dataset.blockid)">' +
-      '<div class="sch-row-id">' + b.displayId + '</div>' +
-      '<div class="sch-row-variety">' + varShort + '</div>' +
-      '<div class="sch-row-ranch">' + ranch + '</div>' +
-    '</div>';
-
-    const cells = dates.map(d => {
-      const dk = dateKey(d);
-      const isToday = dk === today;
-      const scheduledTasks = (SCHEDULED[blockId] && SCHEDULED[blockId][dk]) || [];
-      const conflicts = checkScheduleConflicts(blockId, dk, scheduledTasks);
-      const hasConflict = conflicts.length > 0;
-
-      // Show unscheduled active tasks in today's column as reference
-      const showActiveTasks = (dk === today || dk === dateKey(new Date(Date.now() + 86400000))) && scheduledTasks.length === 0;
-
-      const chips = scheduledTasks.map((task, ti) => {
-        const chipClass = getTaskChipClass(task);
-        const icon = getTaskIcon(task);
-        const short = task.length > 22 ? task.substring(0,20)+'..' : task;
-        return '<div class="sch-task-chip ' + chipClass + '" draggable="true" ' +
-          'data-blockid="' + blockId + '" data-date="' + dk + '" data-taskidx="' + ti + '" ' +
-          'ondragstart="_schDragStart(this)" ondragend="_schDragEnd(this)">' +
-          icon + ' ' + short +
-          '<span data-bid="' + blockId + '" data-dk="' + dk + '" data-ti="' + ti + '" ' +
-            'onclick="_removeScheduledTask(this.dataset.bid,this.dataset.dk,parseInt(this.dataset.ti))" ' +
-            'style="margin-left:auto;cursor:pointer;opacity:.6;font-size:11px">&#x2715;</span>' +
-        '</div>';
+  const startLabel = months[dates[0].getMonth()]+' '+dates[0].getDate();
+  const endLabel = months[dates[6].getMonth()]+' '+dates[6].getDate()+', '+dates[6].getFullYear();
+  const gridStyle = 'grid-template-columns:140px repeat(7,1fr)';
+  const colHeaders = '<div class="sch-row-label sch-col-header" style="background:var(--g900)"><span style="font-size:11px;color:var(--g200)">Block / Task</span></div>'+
+    dates.map((d,i)=>{const dk=dateKey(d);const isToday=dk===today;return '<div class="sch-col-header '+(isToday?'sch-col-today':'')+'"><div class="sch-col-day">'+days[i]+'</div><div class="sch-col-date">'+months[d.getMonth()]+' '+d.getDate()+(isToday?' ✦':'')+'</div></div>';}).join('');
+  const rows = blocksToShow.map(([blockId,b])=>{
+    const variety=lang==='es'?b.varietyEs:b.variety;
+    const ranch=lang==='es'?b.ranchEs:b.ranch;
+    const varShort=variety.length>16?variety.substring(0,14)+'..':variety;
+    const rowLabel='<div class="sch-row-label" data-blockid="'+blockId+'" onclick="_openBlock(this.dataset.blockid)"><div class="sch-row-id">'+b.displayId+'</div><div class="sch-row-variety">'+varShort+'</div><div class="sch-row-ranch">'+ranch+'</div></div>';
+    const cells=dates.map(d=>{
+      const dk=dateKey(d);const isToday=dk===today;
+      const scheduledTasks=(SCHEDULED[blockId]&&SCHEDULED[blockId][dk])||[];
+      const conflicts=checkScheduleConflicts(blockId,dk,scheduledTasks);
+      const chips=scheduledTasks.map((task,ti)=>{
+        const chipClass=getTaskChipClass(task);const icon=getTaskIcon(task);
+        const short=task.length>22?task.substring(0,20)+'..':task;
+        return '<div class="sch-task-chip '+chipClass+'" draggable="true" data-blockid="'+blockId+'" data-date="'+dk+'" data-taskidx="'+ti+'" ondragstart="_schDragStart(this)" ondragend="_schDragEnd(this)">'+icon+' '+short+'<span data-bid="'+blockId+'" data-dk="'+dk+'" data-ti="'+ti+'" onclick="_removeScheduledTask(this.dataset.bid,this.dataset.dk,parseInt(this.dataset.ti))" style="margin-left:auto;cursor:pointer;opacity:.6;font-size:11px">&#x2715;</span></div>';
       }).join('');
-
-      const activeChips = (showActiveTasks && activeTasks.length > 0)
-        ? activeTasks.slice(0,2).map(task => {
-            const chipClass = getTaskChipClass(task);
-            const icon = getTaskIcon(task);
-            const short = task.length > 20 ? task.substring(0,18)+'..' : task;
-            return '<div class="sch-task-chip ' + chipClass + '" style="opacity:.4;border:1px dashed currentColor" title="Unscheduled task">' + icon + ' ' + short + '</div>';
-          }).join('')
-        : '';
-
-      return '<div class="sch-cell ' + (isToday ? 'today-col ' : '') + (hasConflict ? 'conflict' : '') + '" ' +
-        'data-blockid="' + blockId + '" data-date="' + dk + '" ' +
-        'data-tbid2="' + blockId + '" data-tdate2="' + dk + '" ondragover="_schDragOver(event)" ondrop="_schDropEl(event,this)" ' +
-        'data-cbid2="' + blockId + '" data-cdate2="' + dk + '" onclick="_schCellEl(this)">' +
-        chips + activeChips +
-        (hasConflict ? '<div class="sch-conflict-badge">!</div>' : '') +
-        '<div class="sch-add-btn">+</div>' +
-      '</div>';
+      return '<div class="sch-cell '+(isToday?'today-col ':'')+(conflicts.length?'conflict':'') + '" data-tbid2="'+blockId+'" data-tdate2="'+dk+'" data-cbid2="'+blockId+'" data-cdate2="'+dk+'" ondragover="_schDragOver(event)" ondrop="_schDropEl(event,this)" onclick="_schCellEl(this)">'+chips+(conflicts.length?'<div class="sch-conflict-badge">!</div>':'')+'<div class="sch-add-btn">+</div></div>';
     }).join('');
-
-    return rowLabel + cells;
+    return rowLabel+cells;
   }).join('');
-
-  const emptyRow = blocksToShow.length === 0
-    ? '<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--tx3)">No blocks with assigned tasks. Assign tasks to blocks first, then schedule them here.</div>'
-    : '';
-
-  const container = document.getElementById('schedule-container');
-  container.innerHTML =
-    '<div class="sch-header">' +
-      '<div style="font-family:DM Serif Display,serif;font-size:16px;color:#fff">&#128197; Weekly Schedule</div>' +
-      '<div class="sch-nav">' +
-        '<button class="sch-nav-btn" onclick="_schWeek(-1)">&#8592;</button>' +
-        '<div class="sch-week-label">' + startLabel + ' — ' + endLabel + '</div>' +
-        '<button class="sch-nav-btn" onclick="_schWeek(1)">&#8594;</button>' +
-        '<button class="sch-nav-btn" onclick="closeSchedule()" style="margin-left:8px">&#x2715;</button>' +
-      '</div>' +
-    '</div>' +
-    '<div class="sch-grid-wrap">' +
-      '<div class="sch-grid" style="' + gridStyle + '">' +
-        colHeaders + rows + emptyRow +
-      '</div>' +
-    '</div>' +
-    '<div class="sch-legend">' +
-      '<span style="font-size:11px;font-weight:700;color:var(--tx3);margin-right:4px">Legend:</span>' +
-      '<div class="sch-leg-item"><div class="sch-leg-dot" style="background:#FEF3C7;border:1px solid #B45309"></div>Harvest</div>' +
-      '<div class="sch-leg-item"><div class="sch-leg-dot" style="background:#FEE2E2;border:1px solid #991B1B"></div>Spray</div>' +
-      '<div class="sch-leg-item"><div class="sch-leg-dot" style="background:#DBEAFE;border:1px solid #1D4ED8"></div>Irrigate</div>' +
-      '<div class="sch-leg-item"><div class="sch-leg-dot" style="background:#EDE9FE;border:1px solid #7C3AED"></div>Prune</div>' +
-      '<div class="sch-leg-item"><div class="sch-leg-dot" style="background:#FEF2F2;border:1px solid #EF4444"></div>⚠ Conflict</div>' +
-      '<div class="sch-leg-item" style="margin-left:8px;font-style:italic">Drag chips between days · Click cell to add task</div>' +
-    '</div>';
+  const empty=blocksToShow.length===0?'<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--tx3)">No blocks with tasks. Assign tasks to blocks first.</div>':'';
+  const container=document.getElementById('schedule-container');
+  container.innerHTML=
+    '<div class="sch-header"><div style="font-size:16px;color:#fff">&#128197; Weekly Schedule</div><div class="sch-nav"><button class="sch-nav-btn" onclick="_schWeek(-1)">&#8592;</button><div class="sch-week-label">'+startLabel+' — '+endLabel+'</div><button class="sch-nav-btn" onclick="_schWeek(1)">&#8594;</button><button class="sch-nav-btn" onclick="closeSchedule()" style="margin-left:8px">&#x2715;</button></div></div>'+
+    '<div class="sch-grid-wrap"><div class="sch-grid" style="'+gridStyle+'">'+colHeaders+rows+empty+'</div></div>'+
+    '<div class="sch-legend"><span style="font-size:11px;font-weight:700;color:var(--tx3);margin-right:4px">Legend:</span><div class="sch-leg-item"><div class="sch-leg-dot" style="background:#FEF3C7;border:1px solid #B45309"></div>Harvest</div><div class="sch-leg-item"><div class="sch-leg-dot" style="background:#FEE2E2;border:1px solid #991B1B"></div>Spray</div><div class="sch-leg-item"><div class="sch-leg-dot" style="background:#DBEAFE;border:1px solid #1D4ED8"></div>Irrigate</div><div class="sch-leg-item"><div class="sch-leg-dot" style="background:#FEF2F2;border:1px solid #EF4444"></div>⚠ Conflict</div><div class="sch-leg-item" style="margin-left:8px;font-style:italic;font-size:10px">Drag chips between days · Click cell to add</div></div>';
 }
 
-function showSchedule() {
-  document.getElementById('modal-schedule').classList.add('open');
-  document.body.style.overflow = 'hidden';
+function showSchedule() { document.getElementById('modal-schedule').classList.add('open'); document.body.style.overflow='hidden'; renderSchedule(); }
+function closeSchedule() { document.getElementById('modal-schedule').classList.remove('open'); document.body.style.overflow=''; }
+window._schWeek=function(dir){_scheduleWeekOffset+=dir;renderSchedule();};
+window._schDropEl=function(e,el){e.preventDefault();el.style.background='';_schDrop(e,el.dataset.tbid2,el.dataset.tdate2);};
+window._schCellEl=function(el){_schCellClick(el.dataset.cbid2,el.dataset.cdate2);};
+window._schDragStart=function(el){_dragBlockId=el.dataset.blockid;_dragDate=el.dataset.date;_dragTask=SCHEDULED[_dragBlockId]&&SCHEDULED[_dragBlockId][_dragDate]?SCHEDULED[_dragBlockId][_dragDate][parseInt(el.dataset.taskidx)]:null;el.classList.add('dragging');};
+window._schDragEnd=function(el){el.classList.remove('dragging');_dragTask=null;_dragBlockId=null;_dragDate=null;};
+window._schDragOver=function(e){e.preventDefault();e.currentTarget.style.background='rgba(124,58,237,.06)';};
+window._schDrop=function(e,targetBlockId,targetDate){e.preventDefault();e.currentTarget.style.background='';if(!_dragTask||!_dragBlockId||!_dragDate)return;const src=SCHEDULED[_dragBlockId][_dragDate];const idx=src.indexOf(_dragTask);if(idx>-1)src.splice(idx,1);if(!SCHEDULED[targetBlockId])SCHEDULED[targetBlockId]={};if(!SCHEDULED[targetBlockId][targetDate])SCHEDULED[targetBlockId][targetDate]=[];SCHEDULED[targetBlockId][targetDate].push(_dragTask);renderSchedule();};
+window._removeScheduledTask=function(blockId,dateStr,idx){if(SCHEDULED[blockId]&&SCHEDULED[blockId][dateStr]){SCHEDULED[blockId][dateStr].splice(idx,1);renderSchedule();}};
+let _schBId=null,_schDStr=null;
+window._schCellClick=function(blockId,dateStr){
+  _schBId=blockId;_schDStr=dateStr;
+  const block=BLOCKS[blockId];if(!block)return;
+  const activeTasks=(block.assignedTasks||[]).filter(t=>t.startsWith('TASK:')).map(t=>t.replace('TASK:','').trim());
+  const modal=document.getElementById('modal-checkout-tasks');
+  const inner=modal.querySelector('.modal');
+  const d=new Date(dateStr);
+  const dateLabel=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const conflicts=checkScheduleConflicts(blockId,dateStr,activeTasks);
+  const conflictHtml=conflicts.length?'<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:12px;color:#991B1B;font-weight:600">⚠️ '+conflicts.join(' · ')+'</div>':'';
+  const taskItems=activeTasks.length>0?activeTasks.map((task,i)=>'<label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #F3F4F6;cursor:pointer"><input type="checkbox" value="'+i+'" style="width:18px;height:18px;accent-color:#7C3AED;cursor:pointer"><span class="sch-task-chip '+getTaskChipClass(task)+'" style="cursor:default">'+getTaskIcon(task)+' '+task+'</span></label>').join(''):'<div style="color:var(--tx3);font-size:13px;padding:10px 0">No active tasks. Assign tasks to blocks first.</div>';
+  const customInput='<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Or add a new task:</div><input id="sch-custom-task" type="text" placeholder="e.g. Irrigate rows 1-10" style="width:100%;background:var(--bg);border:1.5px solid var(--bd);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box"></div>';
+  inner.innerHTML='<div class="modal-handle"></div><div style="font-size:17px;font-weight:800;color:var(--tx);margin-bottom:2px">&#128197; Schedule Task</div><div style="font-size:12px;color:var(--tx3);margin-bottom:12px">'+block.displayId+' · '+(lang==='es'?block.varietyEs:block.variety)+' · '+dateLabel+'</div>'+conflictHtml+(activeTasks.length>0?'<div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:8px">Select tasks to schedule:</div>':'')+'<div id="sch-task-list">'+taskItems+'</div>'+customInput+'<div style="display:flex;gap:8px;margin-top:14px"><button onclick="closeCheckoutModal()" style="flex:1;background:#F3F4F6;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Cancel</button><button onclick="_schSaveTasksBtn()" style="flex:2;background:#7C3AED;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;color:#fff">Add to Schedule</button></div>';
+  modal.classList.add('open');
+};
+window._schSaveTasksBtn=function(){_schSaveTasks(_schBId,_schDStr);};
+window._schSaveTasks=function(blockId,dateStr){
+  const cbs=document.querySelectorAll('#sch-task-list input[type=checkbox]');
+  const block=BLOCKS[blockId];if(!block)return;
+  const activeTasks=(block.assignedTasks||[]).filter(t=>t.startsWith('TASK:')).map(t=>t.replace('TASK:','').trim());
+  const toSchedule=[];
+  cbs.forEach((cb,i)=>{if(cb.checked&&activeTasks[i])toSchedule.push(activeTasks[i]);});
+  const custom=((document.getElementById('sch-custom-task')||{}).value||'').trim();
+  if(custom)toSchedule.push(custom);
+  if(!toSchedule.length){document.getElementById('modal-checkout-tasks').classList.remove('open');return;}
+  if(!SCHEDULED[blockId])SCHEDULED[blockId]={};
+  if(!SCHEDULED[blockId][dateStr])SCHEDULED[blockId][dateStr]=[];
+  toSchedule.forEach(t=>{if(!SCHEDULED[blockId][dateStr].includes(t))SCHEDULED[blockId][dateStr].push(t);});
+  document.getElementById('modal-checkout-tasks').classList.remove('open');
   renderSchedule();
+};
+
+// ── MAP ───────────────────────────────────────────────────────────────────
+let _map = null;
+
+function getStatusColor(block) {
+  const s = getBlockStatus(block);
+  if (s.cls === 'status-red') return '#EF4444';
+  if (s.cls === 'status-orange') return '#F97316';
+  if (s.cls === 'status-amber') return '#D97706';
+  if (s.cls === 'status-yellow') return '#EAB308';
+  return '#22C55E';
 }
 
-function closeSchedule() {
-  document.getElementById('modal-schedule').classList.remove('open');
+function makePin(color) {
+  return L.divIcon({className:'',html:'<div style="width:16px;height:16px;border-radius:50%;background:'+color+';border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)"></div>',iconSize:[16,16],iconAnchor:[8,8],popupAnchor:[0,-10]});
+}
+
+async function showMapView() {
+  document.getElementById('map-container').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  if (cloudOk) { try { await loadAllBlockStatuses(); } catch(e) {} }
+  if (!_map) {
+    _map = L.map('map-el', {zoomControl:true}).setView([36.50,-119.26], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap',maxZoom:18}).addTo(_map);
+  } else { _map.invalidateSize(); }
+  _map.eachLayer(layer => { if (layer instanceof L.Marker) _map.removeLayer(layer); });
+  const bounds = [];
+  Object.entries(BLOCKS).forEach(([id,b]) => {
+    try {
+      if (!b.lat || !b.lng) return;
+      const lat=parseFloat(b.lat), lng=parseFloat(b.lng);
+      if (isNaN(lat)||isNaN(lng)) return;
+      if (!b.assignedTasks) b.assignedTasks=[];
+      if (!b.checkins) b.checkins=[];
+      const color = getStatusColor(b);
+      const status = getBlockStatus(b);
+      const tpa = calcTreesPerAcre(b.spacing);
+      const total = calcTotalTrees(b.spacing, b.acreage);
+      const marker = L.marker([lat,lng],{icon:makePin(color)});
+      marker.bindPopup('<div style="font-family:DM Sans,sans-serif;min-width:200px"><div style="background:#1B4332;color:#fff;padding:8px 10px;margin:-10px -10px 8px;border-radius:4px 4px 0 0"><div style="font-size:13px;font-weight:800">'+b.displayId+'</div><div style="font-size:11px;opacity:.8">'+b.ranch+'</div></div><div style="font-size:13px;font-weight:600;color:#111827;margin-bottom:4px">'+b.variety+'</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px"><div style="font-size:11px;color:#6B7280">Acreage: <strong>'+b.acreage+' ac</strong></div><div style="font-size:11px;color:#6B7280">Trees/acre: <strong>'+tpa+'</strong></div><div style="font-size:11px;color:#6B7280">Est. trees: <strong>'+total+'</strong></div><div style="font-size:11px;color:#6B7280">Planted: <strong>'+b.plantYear+'</strong></div></div><div style="display:flex;align-items:center;gap:5px;margin-bottom:8px"><div style="width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0"></div><span style="font-size:11px;font-weight:700;color:#374151">'+status.label+'</span></div><button data-blockid="'+id+'" onclick="_openMapBlock(this.dataset.blockid)" style="width:100%;background:#1B4332;color:#fff;border:none;border-radius:6px;padding:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">&#128205; Open Block Page</button></div>',{maxWidth:240});
+      marker.addTo(_map);
+      bounds.push([lat,lng]);
+    } catch(e) { console.warn('Marker error for',id,e); }
+  });
+  if (bounds.length > 0) _map.fitBounds(bounds, {padding:[30,30]});
+  setTimeout(() => _map.invalidateSize(), 100);
+}
+
+window._openMapBlock = function(blockId) {
+  document.getElementById('map-container').classList.remove('open');
+  document.body.style.overflow = '';
+  window.location.hash = blockId;
+  render();
+};
+
+function showGrid() {
+  document.getElementById('map-container').classList.remove('open');
   document.body.style.overflow = '';
 }
 
-window._schWeek = function(dir) {
-  _scheduleWeekOffset += dir;
-  renderSchedule();
-};
-
-let _schBlockId = null, _schDateStr = null;
-window._schCellClick = function(blockId, dateStr) {
-  _schBlockId = blockId; _schDateStr = dateStr;
-  // Show task picker for this cell
-  const block = BLOCKS[blockId];
-  if (!block) return;
-  const activeTasks = (block.assignedTasks||[]).filter(t => t.startsWith('TASK:')).map(t => t.replace('TASK:','').trim());
-
-  const modal = document.getElementById('modal-checkout-tasks');
+// ── ACTIVITY TABS ─────────────────────────────────────────────────────────
+async function showActivityTabs() {
+  const modal = document.getElementById('modal-activity-tabs');
   const inner = modal.querySelector('.modal');
-  const d = new Date(dateStr);
-  const dateLabel = d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
-  const conflicts = checkScheduleConflicts(blockId, dateStr, activeTasks);
-
-  const conflictHtml = conflicts.length > 0
-    ? '<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:12px;color:#991B1B;font-weight:600">' +
-        '⚠️ ' + conflicts.join(' · ') + '</div>'
-    : '';
-
-  const taskItems = activeTasks.length > 0
-    ? activeTasks.map((task, i) =>
-        '<label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #F3F4F6;cursor:pointer">' +
-        '<input type="checkbox" value="' + i + '" style="width:18px;height:18px;accent-color:#7C3AED;cursor:pointer">' +
-        '<span class="sch-task-chip ' + getTaskChipClass(task) + '" style="cursor:default">' + getTaskIcon(task) + ' ' + task + '</span>' +
-        '</label>'
-      ).join('')
-    : '<div style="color:var(--tx3);font-size:13px;padding:10px 0">No active tasks assigned to this block. Assign tasks first.</div>';
-
-  const customInput = '<div style="margin-top:10px">' +
-    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Or add a new task for this day:</div>' +
-    '<input id="sch-custom-task" type="text" placeholder="e.g. Irrigate rows 1-10" style="width:100%;background:var(--bg);border:1.5px solid var(--bd);border-radius:8px;padding:10px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box">' +
-  '</div>';
-
-  inner.innerHTML =
-    '<div class="modal-handle"></div>' +
-    '<div style="font-size:17px;font-weight:800;color:var(--tx);margin-bottom:2px">&#128197; Schedule Task</div>' +
-    '<div style="font-size:12px;color:var(--tx3);margin-bottom:12px">' + block.displayId + ' · ' + (lang==='es'?block.varietyEs:block.variety) + ' · ' + dateLabel + '</div>' +
-    conflictHtml +
-    (activeTasks.length > 0 ? '<div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--tx3);margin-bottom:8px">Select tasks to schedule:</div>' : '') +
-    '<div id="sch-task-list">' + taskItems + '</div>' +
-    customInput +
-    '<div style="display:flex;gap:8px;margin-top:14px">' +
-      '<button onclick="closeCheckoutModal()" style="flex:1;background:#F3F4F6;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Cancel</button>' +
-      '<button onclick="_schSaveTasksBtn()" style="flex:2;background:#7C3AED;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;color:#fff">Add to Schedule</button>' +
-    '</div>';
-
-  document.getElementById('modal-checkout-tasks').classList.add('open');
-};
-
-window._schSaveTasksBtn = function() {
-  _schSaveTasks(_schBlockId, _schDateStr);
-};
-window._schSaveTasks = function(blockId, dateStr) {
-  const checkboxes = document.querySelectorAll('#sch-task-list input[type=checkbox]');
-  const block = BLOCKS[blockId];
-  if (!block) return;
-  const activeTasks = (block.assignedTasks||[]).filter(t => t.startsWith('TASK:')).map(t => t.replace('TASK:','').trim());
-  const toSchedule = [];
-  checkboxes.forEach((cb, i) => { if (cb.checked && activeTasks[i]) toSchedule.push(activeTasks[i]); });
-  const custom = (document.getElementById('sch-custom-task')||{}).value||'';
-  if (custom.trim()) toSchedule.push(custom.trim());
-  if (!toSchedule.length) { document.getElementById('modal-checkout-tasks').classList.remove('open'); return; }
-  if (!SCHEDULED[blockId]) SCHEDULED[blockId] = {};
-  if (!SCHEDULED[blockId][dateStr]) SCHEDULED[blockId][dateStr] = [];
-  toSchedule.forEach(t => { if (!SCHEDULED[blockId][dateStr].includes(t)) SCHEDULED[blockId][dateStr].push(t); });
-  document.getElementById('modal-checkout-tasks').classList.remove('open');
-  renderSchedule();
-};
-
-window._removeScheduledTask = function(blockId, dateStr, idx) {
-  if (SCHEDULED[blockId] && SCHEDULED[blockId][dateStr]) {
-    SCHEDULED[blockId][dateStr].splice(idx, 1);
-    renderSchedule();
-  }
-};
-
-window._schDropEl = function(e, el) {
-  e.preventDefault();
-  el.style.background = '';
-  _schDrop(e, el.dataset.tbid2, el.dataset.tdate2);
-};
-window._schCellEl = function(el) {
-  _schCellClick(el.dataset.cbid2, el.dataset.cdate2);
-};
-window._schDragStart = function(el) {
-  _dragBlockId = el.dataset.blockid;
-  _dragDate = el.dataset.date;
-  _dragTask = SCHEDULED[_dragBlockId] && SCHEDULED[_dragBlockId][_dragDate]
-    ? SCHEDULED[_dragBlockId][_dragDate][parseInt(el.dataset.taskidx)]
-    : null;
-  el.classList.add('dragging');
-};
-
-window._schDragEnd = function(el) {
-  el.classList.remove('dragging');
-  _dragTask = null; _dragBlockId = null; _dragDate = null;
-};
-
-window._schDragOver = function(e) {
-  e.preventDefault();
-  e.currentTarget.style.background = 'rgba(124,58,237,.06)';
-};
-
-window._schDrop = function(e, targetBlockId, targetDate) {
-  e.preventDefault();
-  e.currentTarget.style.background = '';
-  if (!_dragTask || !_dragBlockId || !_dragDate) return;
-  // Remove from source
-  const src = SCHEDULED[_dragBlockId][_dragDate];
-  const idx = src.indexOf(_dragTask);
-  if (idx > -1) src.splice(idx, 1);
-  // Add to target
-  if (!SCHEDULED[targetBlockId]) SCHEDULED[targetBlockId] = {};
-  if (!SCHEDULED[targetBlockId][targetDate]) SCHEDULED[targetBlockId][targetDate] = [];
-  SCHEDULED[targetBlockId][targetDate].push(_dragTask);
-  renderSchedule();
-};
-
-function closeActivityModal() {
-  document.getElementById('modal-activity-tabs').classList.remove('open');
-}
-
-function closeCheckoutModal() {
-  document.getElementById('modal-checkout-tasks').classList.remove('open');
-}
-
-function goHome() {
-  window.location.hash = '';
-  try { window.history.replaceState(null, '', window.location.pathname); } catch(e) {}
-  render();
-}
-
-async function showDailySummary(daysBack) {
-  daysBack = daysBack || 0;
-  const today = new Date();
-  const since = new Date(today.getTime() - daysBack * 24 * 60 * 60 * 1000);
-  since.setHours(0,0,0,0);
-  const todayStr = today.toDateString();
-  const dateLabel = daysBack === 0 ? today.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})
-    : daysBack === 1 ? 'Yesterday'
-    : 'Last ' + daysBack + ' days';
-
-  // Collect all today's activities from all blocks
-  let allEvents = [];
-
+  const ACTIVITY_TYPES = [
+    {key:'all',label:'All',icon:'&#128085;',color:'#374151'},
+    {key:'Task Assigned',label:'Tasks',icon:'&#128203;',color:'#D97706'},
+    {key:'Spray',label:'Spray',icon:'&#128137;',color:'#991B1B'},
+    {key:'Irrigation',label:'Irrigate',icon:'&#128167;',color:'#1D4ED8'},
+    {key:'Harvest',label:'Harvest',icon:'&#129362;',color:'#B45309'},
+    {key:'Pruning',label:'Prune',icon:'&#9985;',color:'#7C3AED'},
+    {key:'Check-In',label:'Check-In',icon:'&#128205;',color:'#16A34A'},
+    {key:'Checkout',label:'Check-Out',icon:'&#9654;',color:'#6B7280'},
+  ];
+  let allActivities = [];
+  let currentTab = 'all';
   if (cloudOk) {
     try {
-      const sinceISO = since.toISOString();
-      const [actsRes, checkinsRes] = await Promise.all([
-        sb.from('block_activities').select('*').gte('created_at', sinceISO).order('created_at', {ascending: true}),
-        sb.from('block_checkins').select('*').gte('created_at', sinceISO).order('created_at', {ascending: true})
+      const since30 = new Date(Date.now()-30*24*60*60*1000).toISOString();
+      const [actsRes,checkinsRes,tasksRes] = await Promise.all([
+        sb.from('block_activities').select('*').gte('created_at',since30).order('created_at',{ascending:false}),
+        sb.from('block_checkins').select('*').gte('created_at',since30).order('created_at',{ascending:false}),
+        sb.from('block_tasks').select('*').gte('created_at',since30).order('created_at',{ascending:false})
       ]);
-
-      (actsRes.data||[]).forEach(a => {
-        const block = BLOCKS[a.block_id];
-        allEvents.push({
-          time: new Date(a.created_at),
-          type: a.activity_type,
-          blockId: a.block_id,
-          displayId: block ? block.displayId : a.block_id,
-          ranch: block ? block.ranch : '',
-          variety: block ? block.variety : '',
-          detail: a.chemical ? a.chemical + ' | REI: ' + a.rei_days + 'h'
-                : a.irrig_type ? a.irrig_type + ' | Dry in ' + a.dry_days + 'd'
-                : a.notes || '',
-          worker: a.logged_by || '',
-          crew: a.crew || null
-        });
-      });
-
-      (checkinsRes.data||[]).forEach(c => {
-        const block = BLOCKS[c.block_id];
-        const isOut = c.checkout;
-        allEvents.push({
-          time: new Date(c.created_at),
-          type: isOut ? 'Checkout' : 'Check-In',
-          blockId: c.block_id,
-          displayId: block ? block.displayId : c.block_id,
-          ranch: block ? block.ranch : '',
-          variety: block ? block.variety : '',
-          detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') + (c.foreman ? ' - ' + c.foreman : ''),
-          worker: c.foreman || '',
-          crew: c.crew || 1
-        });
-        if (c.checkout) {
-          allEvents.push({
-            time: new Date(c.checkout),
-            type: 'Checkout',
-            blockId: c.block_id,
-            displayId: block ? block.displayId : c.block_id,
-            ranch: block ? block.ranch : '',
-            variety: block ? block.variety : '',
-            detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') + (c.foreman ? ' - ' + c.foreman : ''),
-            worker: c.foreman || '',
-            crew: c.crew || 1
-          });
-        }
-      });
-    } catch(e) { console.warn('Summary load error:', e); }
+      (actsRes.data||[]).forEach(a=>{const b=BLOCKS[a.block_id];if(!b)return;allActivities.push({type:a.activity_type||'Other',blockId:a.block_id,displayId:b.displayId,ranch:b.ranch,variety:b.variety,acreage:b.acreage,detail:a.chemical?a.chemical+' · REI: '+(a.rei_days||0)+'h':a.irrig_type?a.irrig_type+(a.dry_days?' · Dry in '+a.dry_days+'d':''):a.notes||'',worker:a.logged_by||'',time:new Date(a.created_at)});});
+      (checkinsRes.data||[]).forEach(c=>{const b=BLOCKS[c.block_id];if(!b)return;const elapsed=c.checkout?((new Date(c.checkout)-new Date(c.created_at))/3600000).toFixed(1)+' hrs':'Active';allActivities.push({type:'Check-In',blockId:c.block_id,displayId:b.displayId,ranch:b.ranch,variety:b.variety,detail:(c.crew||1)+' worker'+((c.crew||1)>1?'s':'')+(c.foreman?' · '+c.foreman:'')+' · '+elapsed,worker:c.foreman||'',time:new Date(c.created_at)});if(c.checkout)allActivities.push({type:'Checkout',blockId:c.block_id,displayId:b.displayId,ranch:b.ranch,variety:b.variety,detail:(c.crew||1)+' worker'+((c.crew||1)>1?'s':'')+(c.foreman?' · '+c.foreman:'')+' · '+elapsed,worker:c.foreman||'',time:new Date(c.checkout)});});
+      (tasksRes.data||[]).forEach(t=>{const b=BLOCKS[t.block_id];if(!b)return;allActivities.push({type:t.status==='completed'?'Task Completed':'Task Assigned',blockId:t.block_id,displayId:b.displayId,ranch:b.ranch,variety:b.variety,detail:t.task+(t.status==='completed'?' · Completed':' · Pending'),worker:'',time:new Date(t.status==='completed'&&t.completed_at?t.completed_at:t.created_at)});});
+    } catch(e) { console.warn('Activity tabs error:',e); }
   }
-
-  // Always supplement with local in-memory data for activities not yet in Supabase
-  const existingTimes = new Set(allEvents.map(e => e.time.toISOString().substring(0,16)));
-  Object.entries(BLOCKS).forEach(([id, b]) => {
-    (b.assignedTasks||[]).forEach(entry => {
-      // Parse entries like "5/7/2026 5:02 PM - CHECK-IN: 1 worker - Lionel"
-      const dateMatch = entry.match(/^(\d+\/\d+\/\d+)\s+(\d+:\d+\s*[AP]M)/i);
-      if (!dateMatch) return;
-      const entryTime = new Date(dateMatch[1] + ' ' + dateMatch[2]);
-      if (isNaN(entryTime.getTime())) return;
-      // Only today
-      if (entryTime < since) return;
-      // Skip if already in allEvents (from Supabase)
-      const timeKey = entryTime.toISOString().substring(0,16);
-      if (existingTimes.has(timeKey)) return;
-
-      let type = 'Other';
-      if (entry.includes('CHECK-IN')) type = 'Check-In';
-      else if (entry.includes('CHECK-OUT') || entry.includes('Checkout')) type = 'Checkout';
-      else if (entry.includes('Spray')) type = 'Spray';
-      else if (entry.includes('Irrigation')) type = 'Irrigation';
-      else if (entry.includes('TASK:')) type = 'Task Assigned';
-      else return; // skip non-activity entries
-
-      // Extract detail after the type
-      const detailMatch = entry.match(/- (?:CHECK-IN|CHECK-OUT|Spray|Irrigation|Checkout|TASK)[:,]?\s*(.*)/i);
-      const detail = detailMatch ? detailMatch[1].trim() : '';
-
-      allEvents.push({
-        time: entryTime,
-        type,
-        blockId: id,
-        displayId: b.displayId,
-        ranch: b.ranch,
-        variety: b.variety,
-        detail,
-        worker: '',
-        crew: null
-      });
-      existingTimes.add(timeKey);
+  const existingKeys=new Set(allActivities.map(a=>normalizeTime(a.time.toISOString())+a.blockId+a.type));
+  Object.entries(BLOCKS).forEach(([id,b])=>{
+    (b.assignedTasks||[]).forEach(entry=>{
+      if(!entry.startsWith('TASK:'))return;
+      const label=entry.replace('TASK:','').trim();
+      const labelLower=label.toLowerCase();
+      const key='local-'+id+label;
+      if(existingKeys.has(key))return;
+      let actType='Task Assigned';
+      if(labelLower.includes('irrigat')||labelLower.includes('regar'))actType='Irrigation';
+      else if(labelLower.includes('spray')||labelLower.includes('fumig'))actType='Spray';
+      else if(labelLower.includes('harvest')||labelLower.includes('cosech'))actType='Harvest';
+      else if(labelLower.includes('prun')||labelLower.includes('podar'))actType='Pruning';
+      allActivities.push({type:actType,blockId:id,displayId:b.displayId,ranch:b.ranch,variety:b.variety,detail:label+' · Pending',worker:'',time:new Date()});
+      existingKeys.add(key);
     });
-
-    // Also check checkins array directly
-    (b.checkins||[]).forEach(c => {
-      const ct = new Date(c.time);
-      if (ct < since) return;
-      const timeKey = ct.toISOString().substring(0,16);
-      if (existingTimes.has(timeKey)) return;
-      allEvents.push({
-        time: ct,
-        type: 'Check-In',
-        blockId: id,
-        displayId: b.displayId,
-        ranch: b.ranch,
-        variety: b.variety,
-        detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') + (c.foreman ? ' - ' + c.foreman : ''),
-        worker: c.foreman || '',
-        crew: c.crew || 1
-      });
-      existingTimes.add(timeKey);
-      if (c.checkout) {
-        const cout = new Date(c.checkout);
-        const coutKey = cout.toISOString().substring(0,16);
-        if (!existingTimes.has(coutKey)) {
-          const elapsed = ((cout - ct)/3600000).toFixed(1);
-          allEvents.push({
-            time: cout,
-            type: 'Checkout',
-            blockId: id,
-            displayId: b.displayId,
-            ranch: b.ranch,
-            variety: b.variety,
-            detail: (c.crew||1) + ' worker' + ((c.crew||1)>1?'s':'') + ' | ' + elapsed + ' hrs',
-            worker: c.foreman || '',
-            crew: c.crew || 1
-          });
-          existingTimes.add(coutKey);
-        }
-      }
-    });
+    if(b.lastIrrigationDate&&b.lastIrrigationType){const key='local-irrig-'+id+b.lastIrrigationDate;if(!existingKeys.has(key)){allActivities.push({type:'Irrigation',blockId:id,displayId:b.displayId,ranch:b.ranch,variety:b.variety,detail:b.lastIrrigationType+' · Dry in '+(b.dryDays||3)+'d',worker:'',time:new Date(b.lastIrrigationDate)});existingKeys.add(key);}}
+    (b.checkins||[]).forEach(c=>{const key='local-checkin-'+id+normalizeTime(c.time);if(existingKeys.has(key))return;const elapsed=c.checkout?((new Date(c.checkout)-new Date(c.time))/3600000).toFixed(1)+' hrs':'Active';allActivities.push({type:'Check-In',blockId:id,displayId:b.displayId,ranch:b.ranch,variety:b.variety,detail:(c.crew||1)+' worker'+((c.crew||1)>1?'s':'')+(c.foreman?' · '+c.foreman:'')+' · '+elapsed,worker:c.foreman||'',time:new Date(c.time)});existingKeys.add(key);});
   });
 
-  // Sort by time
-  allEvents.sort((a,b) => a.time - b.time);
+  function renderTabContent(tab) {
+    const filtered=tab==='all'?allActivities:tab==='Task Assigned'?allActivities.filter(a=>a.type==='Task Assigned'||a.type==='Task Completed'):allActivities.filter(a=>a.type===tab);
+    if(!filtered.length)return'<div style="text-align:center;padding:40px 20px;color:#9CA3AF">No '+tab+' activities in last 30 days</div>';
+    const typeColors={'Spray':'#991B1B','Irrigation':'#1D4ED8','Harvest':'#B45309','Pruning':'#7C3AED','Check-In':'#16A34A','Checkout':'#6B7280','Task Assigned':'#D97706','Task Completed':'#16A34A','Other':'#374151'};
+    const typeIcons={'Spray':'&#128137;','Irrigation':'&#128167;','Harvest':'&#129362;','Pruning':'&#9985;','Check-In':'&#128205;','Checkout':'&#9654;','Task Assigned':'&#128203;','Task Completed':'&#10003;','Other':'&#128085;'};
+    return filtered.map(a=>{
+      const color=typeColors[a.type]||'#374151';
+      const icon=typeIcons[a.type]||'&#128085;';
+      const timeStr=a.time.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+a.time.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+      return'<div data-blockid="'+a.blockId+'" onclick="_openBlock(this.dataset.blockid)" style="display:flex;gap:12px;padding:11px 0;border-bottom:1px solid #F3F4F6;cursor:pointer;align-items:flex-start"><div style="flex-shrink:0;width:34px;height:34px;border-radius:50%;background:'+color+'20;border:2px solid '+color+';display:flex;align-items:center;justify-content:center;font-size:14px;margin-top:2px">'+icon+'</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px"><span style="font-size:12px;font-weight:700;color:'+color+'">'+a.type+'</span><span style="font-size:11px;color:#9CA3AF;white-space:nowrap;margin-left:8px">'+timeStr+'</span></div><div style="font-size:13px;font-weight:600;color:#111827">'+a.displayId+' · '+(a.variety||'')+'</div><div style="font-size:12px;color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+a.ranch+(a.detail?' · '+a.detail:'')+'</div></div></div>';
+    }).join('');
+  }
 
-  // Count stats
-  const checkins = allEvents.filter(e => e.type === 'Check-In');
-  const checkouts = allEvents.filter(e => e.type === 'Checkout');
-  const sprays = allEvents.filter(e => e.type === 'Spray');
-  const irrigations = allEvents.filter(e => e.type === 'Irrigation');
-  const totalWorkers = checkins.reduce((sum, e) => sum + (e.crew||1), 0);
-  const blocksActive = [...new Set(allEvents.map(e => e.blockId))].length;
+  function buildTabs() {
+    return ACTIVITY_TYPES.map(t=>{
+      const count=t.key==='all'?allActivities.length:t.key==='Task Assigned'?allActivities.filter(a=>a.type==='Task Assigned'||a.type==='Task Completed').length:allActivities.filter(a=>a.type===t.key).length;
+      const isActive=t.key===currentTab;
+      return'<button data-tab="'+t.key+'" onclick="_actTab(this.dataset.tab)" style="display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:16px;border:none;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0;'+(isActive?'background:'+t.color+';color:#fff;':'background:#F3F4F6;color:#374151;')+'">'+t.icon+' '+t.label+(count>0?' <span style="opacity:.7;font-size:10px">('+count+')</span>':'')+'</button>';
+    }).join('');
+  }
 
-  const typeColors = {
-    'Check-In': '#16A34A', 'Checkout': '#6B7280', 'Spray': '#991B1B',
-    'Irrigation': '#1D4ED8', 'Pruning': '#7C3AED', 'Fertilizer': '#D97706',
-    'Harvest': '#B45309', 'Repair': '#374151', 'Inspection': '#0369A1', 'Other': '#6B7280'
-  };
-  const typeIcons = {
-    'Check-In': '&#128205;', 'Checkout': '&#9654;', 'Spray': '&#128137;',
-    'Irrigation': '&#128167;', 'Pruning': '&#9985;', 'Fertilizer': '&#129501;',
-    'Harvest': '&#129362;', 'Repair': '&#128295;', 'Inspection': '&#128270;', 'Other': '&#128203;'
-  };
+  window._actTab=function(tab){currentTab=tab;document.getElementById('act-tabs-bar').innerHTML=buildTabs();document.getElementById('act-tabs-content').innerHTML=renderTabContent(tab);};
 
-  const eventsHtml = allEvents.length ? allEvents.map(e => {
-    const color = typeColors[e.type] || '#6B7280';
-    const icon = typeIcons[e.type] || '&#128203;';
-    const timeStr = e.time.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-    return '<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #F3F4F6;align-items:flex-start">' +
-      '<div style="flex-shrink:0;margin-top:2px">' +
-        '<div style="width:32px;height:32px;border-radius:50%;background:' + color + '20;border:2px solid ' + color + ';display:flex;align-items:center;justify-content:center;font-size:14px">' + icon + '</div>' +
-      '</div>' +
-      '<div style="flex:1">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center">' +
-          '<span style="font-size:13px;font-weight:700;color:' + color + '">' + e.type + '</span>' +
-          '<span style="font-size:11px;color:#9CA3AF">' + timeStr + '</span>' +
-        '</div>' +
-        '<div style="font-size:13px;font-weight:600;color:#111827;margin-top:1px">' + (e.displayId||'') + ' &mdash; ' + (e.variety||'') + '</div>' +
-        '<div style="font-size:12px;color:#6B7280">' + (e.ranch||'') + (e.detail ? ' &mdash; ' + e.detail : '') + '</div>' +
-      '</div>' +
-    '</div>';
-  }).join('') : '<div style="text-align:center;padding:30px;color:#9CA3AF;font-size:14px">No activities recorded today yet</div>';
-
-  const modal = document.getElementById('modal-daily-summary');
-  modal.querySelector('.modal').innerHTML =
-    '<div class="modal-handle"></div>' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">' +
-      '<div>' +
-        '<div style="font-size:18px;font-weight:800;color:#111827">Daily Report</div>' +
-        '<div style="font-size:12px;color:#6B7280">' + dateLabel + '</div>' +
-      '</div>' +
-      '<button onclick="document.getElementById(&quot;modal-daily-summary&quot;).classList.remove(&quot;open&quot;)" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9CA3AF">&#x2715;</button>' +
-    '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">' +
-      '<div style="background:#F0FDF4;border-radius:10px;padding:12px;text-align:center">' +
-        '<div style="font-size:22px;font-weight:800;color:#15803D">' + checkins.length + '</div>' +
-        '<div style="font-size:11px;color:#6B7280;font-weight:600">CREWS IN</div>' +
-      '</div>' +
-      '<div style="background:#F3F4F6;border-radius:10px;padding:12px;text-align:center">' +
-        '<div style="font-size:22px;font-weight:800;color:#374151">' + totalWorkers + '</div>' +
-        '<div style="font-size:11px;color:#6B7280;font-weight:600">TOTAL WORKERS</div>' +
-      '</div>' +
-      '<div style="background:#FEF2F2;border-radius:10px;padding:12px;text-align:center">' +
-        '<div style="font-size:22px;font-weight:800;color:#991B1B">' + sprays.length + '</div>' +
-        '<div style="font-size:11px;color:#6B7280;font-weight:600">SPRAYS</div>' +
-      '</div>' +
-      '<div style="background:#EFF6FF;border-radius:10px;padding:12px;text-align:center">' +
-        '<div style="font-size:22px;font-weight:800;color:#1D4ED8">' + irrigations.length + '</div>' +
-        '<div style="font-size:11px;color:#6B7280;font-weight:600">IRRIGATIONS</div>' +
-      '</div>' +
-    '</div>' +
-    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9CA3AF;margin-bottom:8px">' + allEvents.length + ' activities across ' + blocksActive + ' blocks</div>' +
-    '<div style="overflow-y:auto;max-height:45vh">' + eventsHtml + '</div>';
+  inner.innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0"><div style="font-size:18px;font-weight:800;color:#111827">&#128085; Ranch Activities</div><button onclick="closeActivityModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9CA3AF">&#x2715;</button></div>'+
+    '<div style="position:relative;flex-shrink:0"><div id="act-tabs-bar" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-right:28px">'+buildTabs()+'</div><div style="position:absolute;right:0;top:0;height:calc(100% - 8px);width:28px;background:linear-gradient(to right,transparent,#fff);pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:2px"><span style="font-size:14px;color:#9CA3AF">&#8250;</span></div></div>'+
+    '<div id="act-tabs-content" style="overflow-y:auto;flex:1">'+renderTabContent('all')+'</div>';
 
   modal.classList.add('open');
+}
+
+// ── DAILY / WEEKLY REPORTS ────────────────────────────────────────────────
+async function generateDailyReport() {
+  const today = new Date();
+  const since = new Date(today); since.setHours(0,0,0,0);
+  const dateLabel = today.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  let activities=[], checkins=[], tasks=[];
+  if (cloudOk) {
+    try {
+      const [ar,cr,tr] = await Promise.all([
+        sb.from('block_activities').select('*').gte('created_at',since.toISOString()).order('created_at'),
+        sb.from('block_checkins').select('*').gte('created_at',since.toISOString()).order('created_at'),
+        sb.from('block_tasks').select('*').order('created_at')
+      ]);
+      activities=ar.data||[]; checkins=cr.data||[]; tasks=tr.data||[];
+    } catch(e) {}
+  }
+  Object.entries(BLOCKS).forEach(([id,b])=>{
+    (b.checkins||[]).forEach(c=>{const ct=new Date(c.time);if(ct>=since&&!checkins.find(x=>normalizeTime(x.created_at)===normalizeTime(c.time)))checkins.push({block_id:id,crew:c.crew,foreman:c.foreman,checkout:c.checkout,created_at:c.time});});
+  });
+  const pendingTasks=tasks.filter(t=>t.status==='pending');
+  const completedToday=tasks.filter(t=>t.status==='completed'&&t.completed_at&&new Date(t.completed_at)>=since);
+  const sprays=activities.filter(a=>a.activity_type==='Spray');
+  const irrigations=activities.filter(a=>a.activity_type==='Irrigation');
+  const totalWorkers=checkins.reduce((s,c)=>s+(c.crew||1),0);
+  const totalAcres=[...new Set(checkins.map(c=>c.block_id))].reduce((s,id)=>s+parseFloat(BLOCKS[id]?.acreage||0),0);
+  const html=buildReportHTML({title:'Daily Field Operations Report',subtitle:'M&R Farm Management, Inc.',dateLabel,period:'Daily Summary — '+dateLabel,
+    stats:[{label:'Crews Deployed',value:checkins.length},{label:'Total Workers',value:totalWorkers},{label:'Acres Covered',value:totalAcres.toFixed(1)},{label:'Tasks Completed',value:completedToday.length},{label:'Spray Events',value:sprays.length},{label:'Irrigations',value:irrigations.length}],
+    sections:[
+      {title:'Field Activity Log',icon:'📋',headers:['Block','Ranch','Variety','Crew','In/Out','Hours'],rows:checkins.map(c=>{const b=BLOCKS[c.block_id]||{};const inT=new Date(c.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});const outT=c.checkout?new Date(c.checkout).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'Active';const hrs=c.checkout?((new Date(c.checkout)-new Date(c.created_at))/3600000).toFixed(1):'—';return[b.displayId||c.block_id,b.ranch||'',b.variety||'',(c.crew||1)+' workers'+(c.foreman?' — '+c.foreman:''),inT+' → '+outT,hrs+'h'];})},
+      sprays.length>0?{title:'Spray Applications',icon:'🧪',headers:['Block','Ranch','Chemical','REI','Date','Applicator'],rows:sprays.map(a=>{const b=BLOCKS[a.block_id]||{};return[b.displayId||a.block_id,b.ranch||'',a.chemical||'',(a.rei_days||0)+'h REI',a.spray_date||'',a.logged_by||''];})}:null,
+      irrigations.length>0?{title:'Irrigation Events',icon:'💧',headers:['Block','Ranch','Type','Dry Time','Date'],rows:irrigations.map(a=>{const b=BLOCKS[a.block_id]||{};return[b.displayId||a.block_id,b.ranch||'',a.irrig_type||'',(a.dry_days||3)+'d',a.irrig_date||''];})}:null,
+      completedToday.length>0?{title:'Tasks Completed',icon:'✅',headers:['Block','Ranch','Task','Time'],rows:completedToday.map(t=>{const b=BLOCKS[t.block_id]||{};return[b.displayId||t.block_id,b.ranch||'',t.task,t.completed_at?new Date(t.completed_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):''];})}:null,
+      pendingTasks.length>0?{title:'Pending / Upcoming Tasks',icon:'📌',headers:['Block','Ranch','Task','Scheduled'],rows:pendingTasks.map(t=>{const b=BLOCKS[t.block_id]||{};const sm=t.task.match(/^\[(\d{4}-\d{2}-\d{2})\]/);const ds=sm?new Date(sm[1]+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Unscheduled';const label=t.task.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/,'');return[b.displayId||t.block_id,b.ranch||'',label,ds];})}:null
+    ].filter(Boolean)});
+  openReport(html,'MR_Daily_Report_'+today.toISOString().split('T')[0]+'.html');
+}
+
+async function generateWeeklyReport() {
+  const today=new Date();const day=today.getDay();
+  const monday=new Date(today);monday.setDate(today.getDate()-(day===0?6:day-1));monday.setHours(0,0,0,0);
+  const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);sunday.setHours(23,59,59,999);
+  const dateLabel=monday.toLocaleDateString('en-US',{month:'long',day:'numeric'})+' – '+sunday.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  let activities=[],checkins=[],tasks=[];
+  if(cloudOk){try{const[ar,cr,tr]=await Promise.all([sb.from('block_activities').select('*').gte('created_at',monday.toISOString()).lte('created_at',sunday.toISOString()).order('created_at'),sb.from('block_checkins').select('*').gte('created_at',monday.toISOString()).lte('created_at',sunday.toISOString()).order('created_at'),sb.from('block_tasks').select('*').order('created_at')]);activities=ar.data||[];checkins=cr.data||[];tasks=tr.data||[];}catch(e){}}
+  const completedWeek=tasks.filter(t=>t.status==='completed'&&t.completed_at&&new Date(t.completed_at)>=monday);
+  const pendingTasks=tasks.filter(t=>t.status==='pending');
+  const sprays=activities.filter(a=>a.activity_type==='Spray');
+  const irrigations=activities.filter(a=>a.activity_type==='Irrigation');
+  const totalWorkerDays=checkins.reduce((s,c)=>s+(c.crew||1),0);
+  const uniqueBlocks=[...new Set([...checkins.map(c=>c.block_id),...activities.map(a=>a.block_id)])];
+  const totalAcres=uniqueBlocks.reduce((s,id)=>s+parseFloat(BLOCKS[id]?.acreage||0),0);
+  const byDay={};
+  checkins.forEach(c=>{const d=new Date(c.created_at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});if(!byDay[d])byDay[d]=[];byDay[d].push(c);});
+  const dailyRows=Object.entries(byDay).map(([day,dc])=>{const workers=dc.reduce((s,c)=>s+(c.crew||1),0);const blocks=[...new Set(dc.map(c=>c.block_id))].map(id=>BLOCKS[id]?.displayId||id).join(', ');const acts=activities.filter(a=>new Date(a.created_at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})===day);const actSummary=acts.length?acts.map(a=>a.activity_type).join(', '):'Field work';return[day,workers+' workers',blocks,actSummary];});
+  const html=buildReportHTML({title:'Weekly Field Operations Report',subtitle:'M&R Farm Management, Inc.',dateLabel,period:'Week of '+dateLabel,
+    stats:[{label:'Days Active',value:Object.keys(byDay).length},{label:'Worker-Days',value:totalWorkerDays},{label:'Acres Covered',value:totalAcres.toFixed(1)},{label:'Tasks Completed',value:completedWeek.length},{label:'Spray Events',value:sprays.length},{label:'Blocks Active',value:uniqueBlocks.length}],
+    sections:[
+      {title:'Daily Activity Summary',icon:'📅',headers:['Day','Crew','Blocks','Activities'],rows:dailyRows},
+      sprays.length>0?{title:'Spray Applications',icon:'🧪',headers:['Date','Block','Ranch','Chemical','REI','Applicator'],rows:sprays.map(a=>{const b=BLOCKS[a.block_id]||{};const d=new Date(a.created_at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});return[d,b.displayId||a.block_id,b.ranch||'',a.chemical||'',(a.rei_days||0)+'h REI',a.logged_by||''];})}:null,
+      completedWeek.length>0?{title:'Tasks Completed This Week',icon:'✅',headers:['Date','Block','Ranch','Task'],rows:completedWeek.map(t=>{const b=BLOCKS[t.block_id]||{};const d=t.completed_at?new Date(t.completed_at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'';return[d,b.displayId||t.block_id,b.ranch||'',t.task.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/,'')];})}:null,
+      pendingTasks.length>0?{title:'Upcoming Scheduled Work',icon:'📌',headers:['Block','Ranch','Task','Scheduled'],rows:pendingTasks.map(t=>{const b=BLOCKS[t.block_id]||{};const sm=t.task.match(/^\[(\d{4}-\d{2}-\d{2})\]/);const ds=sm?new Date(sm[1]+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'Unscheduled';const label=t.task.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/,'');return[b.displayId||t.block_id,b.ranch||'',label,ds];})}:null
+    ].filter(Boolean)});
+  openReport(html,'MR_Weekly_Report_'+monday.toISOString().split('T')[0]+'.html');
+}
+
+function buildReportHTML({title,subtitle,dateLabel,period,stats,sections}) {
+  const generated=new Date().toLocaleString('en-US',{month:'long',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  const statsHtml=stats.map(s=>'<div style="flex:1;min-width:110px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:14px;text-align:center"><div style="font-size:26px;font-weight:800;color:#1B4332;line-height:1">'+s.value+'</div><div style="font-size:10px;color:#4B9A4B;font-weight:600;margin-top:4px;text-transform:uppercase;letter-spacing:.05em">'+s.label+'</div></div>').join('');
+  const sectionsHtml=sections.map(sec=>{
+    const headerRow='<tr>'+sec.headers.map(h=>'<th style="background:#1B4332;color:#fff;padding:10px 12px;text-align:left;font-size:12px;font-weight:600;letter-spacing:.03em">'+h+'</th>').join('')+'</tr>';
+    const dataRows=sec.rows.length>0?sec.rows.map((row,ri)=>'<tr style="background:'+(ri%2===0?'#fff':'#F9FAFB')+'">'+row.map(cell=>'<td style="padding:9px 12px;font-size:13px;color:#374151;border-bottom:1px solid #F3F4F6">'+(cell||'—')+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="'+sec.headers.length+'" style="padding:16px;text-align:center;color:#9CA3AF;font-size:13px">No records</td></tr>';
+    return'<div style="margin-bottom:32px"><h2 style="font-size:16px;font-weight:700;color:#1B4332;margin:0 0 12px;display:flex;align-items:center;gap:8px;border-bottom:2px solid #D8F3DC;padding-bottom:8px">'+sec.icon+' '+sec.title+'</h2><table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)">'+headerRow+dataRows+'</table></div>';
+  }).join('');
+  return'<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+' — '+dateLabel+'</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#F9FAFB;color:#111827}@media print{body{background:white}.no-print{display:none}@page{margin:1.5cm}}</style></head><body>'+
+    '<div class="no-print" style="background:#1B4332;padding:12px 24px;display:flex;align-items:center;justify-content:space-between"><span style="color:#fff;font-size:14px;font-weight:600">'+title+'</span><div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#52B788;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer">🖨 Print / Save PDF</button><button onclick="window.close()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:14px;cursor:pointer">✕ Close</button></div></div>'+
+    '<div style="max-width:900px;margin:0 auto;padding:32px 24px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:20px;border-bottom:3px solid #1B4332"><div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#52B788;margin-bottom:6px">M&R Farm Management, Inc. · Powered by AgCommand</div><h1 style="font-size:26px;font-weight:800;color:#1B4332;line-height:1.2;margin-bottom:4px">'+title+'</h1><div style="font-size:15px;color:#6B7280">'+period+'</div></div><div style="text-align:right"><div style="font-size:11px;color:#9CA3AF">Generated</div><div style="font-size:13px;font-weight:600;color:#374151">'+generated+'</div><div style="font-size:11px;color:#9CA3AF;margin-top:4px">Martinez Accounting Inc.</div></div></div>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:32px">'+statsHtml+'</div>'+
+    sectionsHtml+
+    '<div style="border-top:1px solid #E5E7EB;padding-top:16px;margin-top:16px;display:flex;justify-content:space-between"><div style="font-size:11px;color:#9CA3AF">M&R Farm Management, Inc. · Martinez Accounting Inc.</div><div style="font-size:11px;color:#9CA3AF">Powered by AgCommand</div></div>'+
+    '</div></body></html>';
+}
+
+function openReport(html, filename) {
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const win=window.open(url,'_blank');
+  if(!win){const a=document.createElement('a');a.href=url;a.download=filename;a.click();}
 }
 
 // ── BOOT ──────────────────────────────────────────────────────────────────
@@ -3918,7 +3295,6 @@ try {
   console.warn('Supabase init error:', e);
   cloudOk = false;
 }
-// Always render regardless of Supabase status
 try {
   render();
 } catch(e) {
@@ -3926,14 +3302,12 @@ try {
   document.getElementById('block-content').innerHTML = '<div style="padding:40px 20px;text-align:center"><h2>Loading...</h2><p style="color:#666;margin-top:8px">Please refresh the page</p></div>';
 }
 
-// Auto-refresh home screen every 30 seconds to pick up new check-ins and tasks
+// Auto-refresh home screen every 30 seconds
 setInterval(function() {
   const id = getBlockId();
-  if (!id || !BLOCKS[id]) {
-    // Only auto-refresh on home screen
-    render();
-  }
+  if (!id || !BLOCKS[id]) { render(); }
 }, 30000);
+
 </script>
 </body>
 </html>
