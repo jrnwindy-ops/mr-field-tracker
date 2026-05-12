@@ -1627,6 +1627,15 @@ function setLang(l) {
 }
 
 // ── ROUTING ──────────────────────────────────────────────────────────────
+function goHome() {
+  // Clear block from URL and go back to grid
+  window.location.hash = '';
+  const url = window.location.pathname + window.location.search;
+  history.pushState(null, '', url);
+  showGrid();
+  render();
+}
+
 function getBlockId() {
   const hash = window.location.hash.replace('#','').trim();
   const params = new URLSearchParams(window.location.search);
@@ -2904,14 +2913,21 @@ async function doCheckin(blockId) {
       (lat ? ' (GPS: ' + lat + ', ' + lng + ')' : '');
     block.assignedTasks.unshift(entry);
     saveCheckin_cloud(blockId, {crew, foreman, lat, lng, accuracy});
+    // Restore button before render
+    const btn2 = document.querySelector('.checkin-btn');
+    if (btn2) { btn2.disabled = false; }
     render();
   }
+
+  // Show immediate feedback so user knows it registered
+  const btn = document.querySelector('.checkin-btn');
+  if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
 
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       pos => saveCheckin(pos.coords.latitude.toFixed(6), pos.coords.longitude.toFixed(6), Math.round(pos.coords.accuracy)),
-      () => saveCheckin(null, null, null),
-      {timeout: 8000}
+      () => saveCheckin(null, null, null), // GPS failed — save without coords
+      { timeout: 5000, maximumAge: 60000 }
     );
   } else {
     saveCheckin(null, null, null);
@@ -3113,6 +3129,8 @@ window._openMapBlock = function(blockId) {
 };
 
 function showGrid() {
+  // Clear block hash from URL
+  if(window.location.hash) history.pushState(null,"",window.location.pathname+window.location.search);
   document.getElementById('map-container').classList.remove('open');
   document.body.style.overflow = '';
 }
