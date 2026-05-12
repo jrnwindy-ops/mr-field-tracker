@@ -1387,15 +1387,18 @@ async function loadBlockData(blockId) {
       block.lastIrrigation = new Date(lastIrrig.irrig_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     }
 
-    // Restore checkins
-    block.checkins = (checkinsRes.data || []).map(c => ({
-      time: c.created_at,
-      crew: c.crew,
-      foreman: c.foreman,
-      lat: c.lat,
-      lng: c.lng,
-      checkout: c.checkout || (CHECKED_OUT.has(normalizeTime(c.created_at)) ? new Date().toISOString() : null)
-    }));
+    // Restore checkins — but skip if a local checkin was just saved
+    // to prevent the cloud (which may not have it yet) from overwriting it
+    if (!_checkinPending) {
+      block.checkins = (checkinsRes.data || []).map(c => ({
+        time: c.created_at,
+        crew: c.crew,
+        foreman: c.foreman,
+        lat: c.lat,
+        lng: c.lng,
+        checkout: c.checkout || (CHECKED_OUT.has(normalizeTime(c.created_at)) ? new Date().toISOString() : null)
+      }));
+    }
 
   } catch(e) {
     console.warn('loadBlockData error:', e);
@@ -2033,6 +2036,7 @@ function buildCheckinCard(id, b) {
 // ── NOT FOUND ─────────────────────────────────────────────────────────────
 // Track checkouts in memory — use normalized time keys to avoid format mismatches
 const CHECKED_OUT = new Set();
+let _checkinPending = false; // prevents cloud reload from overwriting fresh local checkin
 
 function normalizeTime(t) {
   if (!t) return '';
@@ -2926,20 +2930,28 @@ async function doCheckin(blockId) {
       if (!block.assignedTasks) block.assignedTasks = [];
       block.assignedTasks.unshift(entry);
 
-      // Save to cloud (non-blocking — don't await)
+      // Save to cloud — wait for confirmation before allowing reload
       if (cloudOk) {
+        // Set flag to prevent loadBlockData overwriting our local checkin
+        _checkinPending = true;
         sb.from('block_checkins')
           .insert({ block_id: blockId, crew, foreman, lat, lng, accuracy,
             checked_in_at: now.toISOString() })
-          .then(() => {})
-          .catch(e => console.warn('Checkin cloud save:', e));
+          .then(() => {
+            _checkinPending = false;
+            console.log('Checkin saved to cloud');
+          })
+          .catch(e => {
+            _checkinPending = false;
+            console.warn('Checkin cloud save:', e);
+          });
       }
 
-      // Re-render immediately
-      render();
+      // Re-render with local data immediately (skip cloud reload this time)
+      renderBlock(block, blockId);
+      buildCheckinCard(blockId, block);
     } catch(e) {
       console.error('Checkin error:', e);
-      // Restore button on error
       if (btn) { btn.textContent = '\u2713 Confirm Arrival / Confirmar Llegada'; btn.disabled = false; }
     }
   }
