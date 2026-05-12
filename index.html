@@ -1929,11 +1929,11 @@ function buildCheckinCard(id, b) {
   const isQRScan = new URLSearchParams(window.location.search).get('checkin') === '1';
   const activeCheckin = getTodayCheckin(b);
 
-  // Always show checkout button if there is an active checkin
-  // Only show check-in form if arriving via QR scan
-  // Double check with CHECKED_OUT in case activeCheckin slipped through
+  // Show checkout if already checked in
+  // Show check-in form if QR scan (checkin=1 in URL) OR if there's an active checkin
+  // Don't show anything if just browsing a block without QR
   if (activeCheckin && CHECKED_OUT.has(normalizeTime(activeCheckin.time))) return;
-  // Show check-in form regardless of QR scan — allow manual check-in from block page
+  if (!activeCheckin && !isQRScan) return; // browsing only — no checkin UI
 
   const alreadyCheckedIn = !!activeCheckin;
 
@@ -2577,6 +2577,21 @@ function saveTaskDate(blockId, encodedTask) {
 }
 
 // ── CHECKOUT WITH TASKS ────────────────────────────────────────────────────
+function doCheckout(blockId, checkin) {
+  const block = BLOCKS[blockId];
+  if (!block) return;
+  // Get active tasks to offer completing at checkout
+  const activeTasks = (block.assignedTasks || []).filter(t =>
+    t.startsWith('TASK:') && !t.includes('COMPLETED')
+  );
+  if (activeTasks.length > 0) {
+    showCheckoutTaskModal(blockId, checkin, activeTasks);
+  } else {
+    // No tasks — confirm checkout directly
+    confirmCheckout(blockId, checkin, [], '');
+  }
+}
+
 function showCheckoutTaskModal(blockId, checkin, tasks) {
   _checkoutBlockId = blockId;
   _checkoutCheckin = checkin;
@@ -2931,10 +2946,11 @@ async function doCheckin(blockId) {
       if (!block.assignedTasks) block.assignedTasks = [];
       block.assignedTasks.unshift(entry);
 
-      // Save to cloud — wait for confirmation before allowing reload
+      // Save to cloud non-blocking
+      _checkinPending = true;
+      // Safety net — always clear flag after 10s regardless
+      setTimeout(() => { _checkinPending = false; }, 10000);
       if (cloudOk) {
-        // Set flag to prevent loadBlockData overwriting our local checkin
-        _checkinPending = true;
         sb.from('block_checkins')
           .insert({ block_id: blockId, crew, foreman, lat, lng, accuracy,
             checked_in_at: now.toISOString() })
@@ -2944,10 +2960,11 @@ async function doCheckin(blockId) {
           })
           .catch(e => {
             _checkinPending = false;
-            console.warn('Checkin cloud save:', e);
+            console.warn('Checkin cloud save failed (saved locally):', e);
           });
-        // Safety net — clear flag after 8s even if promise never resolves
-        setTimeout(() => { _checkinPending = false; }, 8000);
+      } else {
+        // No cloud — clear flag after short delay
+        setTimeout(() => { _checkinPending = false; }, 500);
       }
 
       // Re-render block detail with local data immediately
@@ -3368,8 +3385,7 @@ try {
 
 // Auto-refresh home screen every 30 seconds
 setInterval(function() {
-  const id = getBlockId();
-  if (!id || !BLOCKS[id]) { render(); }
+  render(); // refresh both home grid and block detail every 30s
 }, 30000);
 
 </script>
