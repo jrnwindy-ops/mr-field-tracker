@@ -3324,10 +3324,15 @@ async function generateDailyReport() {
         sb.from('block_tasks').select('*').order('created_at')
       ]);
       activities=ar.data||[]; checkins=cr.data||[]; tasks=tr.data||[];
-    } catch(e) {}
+    } catch(e) { console.warn('Report data error:',e); }
   }
+  // Merge local checkins not yet in cloud
   Object.entries(BLOCKS).forEach(([id,b])=>{
-    (b.checkins||[]).forEach(c=>{const ct=new Date(c.time);if(ct>=since&&!checkins.find(x=>normalizeTime(x.created_at)===normalizeTime(c.time)))checkins.push({block_id:id,crew:c.crew,foreman:c.foreman,checkout:c.checkout,created_at:c.time});});
+    (b.checkins||[]).forEach(c=>{
+      const ct=new Date(c.time);
+      if(ct>=since && !checkins.find(x=>normalizeTime(x.created_at)===normalizeTime(c.time)))
+        checkins.push({block_id:id,crew:c.crew,foreman:c.foreman,checkout:c.checkout,created_at:c.time});
+    });
   });
   const pendingTasks=tasks.filter(t=>t.status==='pending');
   const completedToday=tasks.filter(t=>t.status==='completed'&&t.completed_at&&new Date(t.completed_at)>=since);
@@ -3335,25 +3340,61 @@ async function generateDailyReport() {
   const irrigations=activities.filter(a=>a.activity_type==='Irrigation');
   const totalWorkers=checkins.reduce((s,c)=>s+(c.crew||1),0);
   const totalAcres=[...new Set(checkins.map(c=>c.block_id))].reduce((s,id)=>s+parseFloat(BLOCKS[id]?.acreage||0),0);
-  const html=buildReportHTML({title:'Daily Field Operations Report',subtitle:'M&R Farm Management, Inc.',dateLabel,period:'Daily Summary — '+dateLabel,
-    stats:[{label:'Crews Deployed',value:checkins.length},{label:'Total Workers',value:totalWorkers},{label:'Acres Covered',value:totalAcres.toFixed(1)},{label:'Tasks Completed',value:completedToday.length},{label:'Spray Events',value:sprays.length},{label:'Irrigations',value:irrigations.length}],
+  const html=buildReportHTML({
+    title:'Daily Field Operations Report',
+    dateLabel, period:'Daily Summary — '+dateLabel,
+    stats:[
+      {label:'Crews Deployed',value:checkins.length},
+      {label:'Total Workers',value:totalWorkers},
+      {label:'Acres Covered',value:totalAcres.toFixed(1)},
+      {label:'Tasks Completed',value:completedToday.length},
+      {label:'Spray Events',value:sprays.length},
+      {label:'Irrigations',value:irrigations.length}
+    ],
     sections:[
-      {title:'Field Activity Log',icon:'📋',headers:['Block','Ranch','Variety','Crew','In/Out','Hours'],rows:checkins.map(c=>{const b=BLOCKS[c.block_id]||{};const inT=new Date(c.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});const outT=c.checkout?new Date(c.checkout).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'Active';const hrs=c.checkout?((new Date(c.checkout)-new Date(c.created_at))/3600000).toFixed(1):'—';return[b.displayId||c.block_id,b.ranch||'',b.variety||'',(c.crew||1)+' workers'+(c.foreman?' — '+c.foreman:''),inT+' → '+outT,hrs+'h'];})},
-      sprays.length>0?{title:'Spray Applications',icon:'🧪',headers:['Block','Ranch','Chemical','REI','Date','Applicator'],rows:sprays.map(a=>{const b=BLOCKS[a.block_id]||{};return[b.displayId||a.block_id,b.ranch||'',a.chemical||'',(a.rei_days||0)+'h REI',a.spray_date||'',a.logged_by||''];})}:null,
-      irrigations.length>0?{title:'Irrigation Events',icon:'💧',headers:['Block','Ranch','Type','Dry Time','Date'],rows:irrigations.map(a=>{const b=BLOCKS[a.block_id]||{};return[b.displayId||a.block_id,b.ranch||'',a.irrig_type||'',(a.dry_days||3)+'d',a.irrig_date||''];})}:null,
-      completedToday.length>0?{title:'Tasks Completed',icon:'✅',headers:['Block','Ranch','Task','Time'],rows:completedToday.map(t=>{const b=BLOCKS[t.block_id]||{};return[b.displayId||t.block_id,b.ranch||'',t.task,t.completed_at?new Date(t.completed_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):''];})}:null,
-      pendingTasks.length>0?{title:'Pending / Upcoming Tasks',icon:'📌',headers:['Block','Ranch','Task','Scheduled'],rows:pendingTasks.map(t=>{const b=BLOCKS[t.block_id]||{};const sm=t.task.match(/^\[(\d{4}-\d{2}-\d{2})\]/);const ds=sm?new Date(sm[1]+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Unscheduled';const label=t.task.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/,'');return[b.displayId||t.block_id,b.ranch||'',label,ds];})}:null
-    ].filter(Boolean)});
-  openReport(html,'MR_Daily_Report_'+today.toISOString().split('T')[0]+'.html');
+      {title:'Field Activity Log',icon:'📋',
+        headers:['Block','Ranch','Variety','Crew','Time In','Time Out','Hours'],
+        rows:checkins.map(c=>{
+          const b=BLOCKS[c.block_id]||{};
+          const inT=new Date(c.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+          const outT=c.checkout?new Date(c.checkout).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'Active';
+          const hrs=c.checkout?((new Date(c.checkout)-new Date(c.created_at))/3600000).toFixed(1):'—';
+          return[b.displayId||c.block_id,b.ranch||'',b.variety||'',(c.crew||1)+' workers'+(c.foreman?' — '+c.foreman:''),inT,outT,hrs+'h'];
+        })
+      },
+      sprays.length>0?{title:'Spray Applications',icon:'🧪',
+        headers:['Block','Ranch','Chemical','REI','Date','Applicator'],
+        rows:sprays.map(a=>{const b=BLOCKS[a.block_id]||{};return[b.displayId||a.block_id,b.ranch||'',a.chemical||'',(a.rei_days||0)+'h REI',a.spray_date||'',a.logged_by||''];})}:null,
+      irrigations.length>0?{title:'Irrigation Events',icon:'💧',
+        headers:['Block','Ranch','Type','Dry Time','Date'],
+        rows:irrigations.map(a=>{const b=BLOCKS[a.block_id]||{};return[b.displayId||a.block_id,b.ranch||'',a.irrig_type||'',(a.dry_days||3)+'d',a.irrig_date||''];})}:null,
+      completedToday.length>0?{title:'Tasks Completed Today',icon:'✅',
+        headers:['Block','Ranch','Task','Completed'],
+        rows:completedToday.map(t=>{const b=BLOCKS[t.block_id]||{};return[b.displayId||t.block_id,b.ranch||'',t.task.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/,''),t.completed_at?new Date(t.completed_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'']; })}:null,
+      pendingTasks.length>0?{title:'Pending Tasks',icon:'📌',
+        headers:['Block','Ranch','Task','Scheduled'],
+        rows:pendingTasks.map(t=>{const b=BLOCKS[t.block_id]||{};const sm=t.task.match(/^\[(\d{4}-\d{2}-\d{2})\]/);const ds=sm?new Date(sm[1]+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Unscheduled';const label=t.task.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/,'');return[b.displayId||t.block_id,b.ranch||'',label,ds];})}:null
+    ].filter(Boolean)
+  });
+  openReport(html);
 }
 
 async function generateWeeklyReport() {
-  const today=new Date();const day=today.getDay();
-  const monday=new Date(today);monday.setDate(today.getDate()-(day===0?6:day-1));monday.setHours(0,0,0,0);
-  const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);sunday.setHours(23,59,59,999);
+  const today=new Date(); const day=today.getDay();
+  const monday=new Date(today); monday.setDate(today.getDate()-(day===0?6:day-1)); monday.setHours(0,0,0,0);
+  const sunday=new Date(monday); sunday.setDate(monday.getDate()+6); sunday.setHours(23,59,59,999);
   const dateLabel=monday.toLocaleDateString('en-US',{month:'long',day:'numeric'})+' – '+sunday.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   let activities=[],checkins=[],tasks=[];
-  if(cloudOk){try{const[ar,cr,tr]=await Promise.all([sb.from('block_activities').select('*').gte('created_at',monday.toISOString()).lte('created_at',sunday.toISOString()).order('created_at'),sb.from('block_checkins').select('*').gte('created_at',monday.toISOString()).lte('created_at',sunday.toISOString()).order('created_at'),sb.from('block_tasks').select('*').order('created_at')]);activities=ar.data||[];checkins=cr.data||[];tasks=tr.data||[];}catch(e){}}
+  if(cloudOk){
+    try{
+      const[ar,cr,tr]=await Promise.all([
+        sb.from('block_activities').select('*').gte('created_at',monday.toISOString()).lte('created_at',sunday.toISOString()).order('created_at'),
+        sb.from('block_checkins').select('*').gte('created_at',monday.toISOString()).lte('created_at',sunday.toISOString()).order('created_at'),
+        sb.from('block_tasks').select('*').order('created_at')
+      ]);
+      activities=ar.data||[]; checkins=cr.data||[]; tasks=tr.data||[];
+    }catch(e){ console.warn('Weekly report error:',e); }
+  }
   const completedWeek=tasks.filter(t=>t.status==='completed'&&t.completed_at&&new Date(t.completed_at)>=monday);
   const pendingTasks=tasks.filter(t=>t.status==='pending');
   const sprays=activities.filter(a=>a.activity_type==='Spray');
@@ -3362,18 +3403,39 @@ async function generateWeeklyReport() {
   const uniqueBlocks=[...new Set([...checkins.map(c=>c.block_id),...activities.map(a=>a.block_id)])];
   const totalAcres=uniqueBlocks.reduce((s,id)=>s+parseFloat(BLOCKS[id]?.acreage||0),0);
   const byDay={};
-  checkins.forEach(c=>{const d=new Date(c.created_at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});if(!byDay[d])byDay[d]=[];byDay[d].push(c);});
-  const dailyRows=Object.entries(byDay).map(([day,dc])=>{const workers=dc.reduce((s,c)=>s+(c.crew||1),0);const blocks=[...new Set(dc.map(c=>c.block_id))].map(id=>BLOCKS[id]?.displayId||id).join(', ');const acts=activities.filter(a=>new Date(a.created_at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})===day);const actSummary=acts.length?acts.map(a=>a.activity_type).join(', '):'Field work';return[day,workers+' workers',blocks,actSummary];});
-  const html=buildReportHTML({title:'Weekly Field Operations Report',subtitle:'M&R Farm Management, Inc.',dateLabel,period:'Week of '+dateLabel,
-    stats:[{label:'Days Active',value:Object.keys(byDay).length},{label:'Worker-Days',value:totalWorkerDays},{label:'Acres Covered',value:totalAcres.toFixed(1)},{label:'Tasks Completed',value:completedWeek.length},{label:'Spray Events',value:sprays.length},{label:'Blocks Active',value:uniqueBlocks.length}],
+  checkins.forEach(c=>{
+    const d=new Date(c.created_at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    if(!byDay[d])byDay[d]=[]; byDay[d].push(c);
+  });
+  const dailyRows=Object.entries(byDay).map(([d,dc])=>{
+    const workers=dc.reduce((s,c)=>s+(c.crew||1),0);
+    const blocks=[...new Set(dc.map(c=>c.block_id))].map(id=>BLOCKS[id]?.displayId||id).join(', ');
+    const acts=activities.filter(a=>new Date(a.created_at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})===d);
+    return[d,workers+' workers',blocks,acts.length?acts.map(a=>a.activity_type).join(', '):'Field work'];
+  });
+  const html=buildReportHTML({
+    title:'Weekly Field Operations Report',
+    dateLabel, period:'Week of '+dateLabel,
+    stats:[
+      {label:'Days Active',value:Object.keys(byDay).length},
+      {label:'Worker-Days',value:totalWorkerDays},
+      {label:'Acres Covered',value:totalAcres.toFixed(1)},
+      {label:'Tasks Completed',value:completedWeek.length},
+      {label:'Spray Events',value:sprays.length},
+      {label:'Blocks Active',value:uniqueBlocks.length}
+    ],
     sections:[
       {title:'Daily Activity Summary',icon:'📅',headers:['Day','Crew','Blocks','Activities'],rows:dailyRows},
       sprays.length>0?{title:'Spray Applications',icon:'🧪',headers:['Date','Block','Ranch','Chemical','REI','Applicator'],rows:sprays.map(a=>{const b=BLOCKS[a.block_id]||{};const d=new Date(a.created_at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});return[d,b.displayId||a.block_id,b.ranch||'',a.chemical||'',(a.rei_days||0)+'h REI',a.logged_by||''];})}:null,
+      irrigations.length>0?{title:'Irrigation Events',icon:'💧',headers:['Date','Block','Ranch','Type','Dry Days'],rows:irrigations.map(a=>{const b=BLOCKS[a.block_id]||{};const d=new Date(a.created_at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});return[d,b.displayId||a.block_id,b.ranch||'',a.irrig_type||'',(a.dry_days||3)+'d'];})}:null,
       completedWeek.length>0?{title:'Tasks Completed This Week',icon:'✅',headers:['Date','Block','Ranch','Task'],rows:completedWeek.map(t=>{const b=BLOCKS[t.block_id]||{};const d=t.completed_at?new Date(t.completed_at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'';return[d,b.displayId||t.block_id,b.ranch||'',t.task.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/,'')];})}:null,
       pendingTasks.length>0?{title:'Upcoming Scheduled Work',icon:'📌',headers:['Block','Ranch','Task','Scheduled'],rows:pendingTasks.map(t=>{const b=BLOCKS[t.block_id]||{};const sm=t.task.match(/^\[(\d{4}-\d{2}-\d{2})\]/);const ds=sm?new Date(sm[1]+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'Unscheduled';const label=t.task.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/,'');return[b.displayId||t.block_id,b.ranch||'',label,ds];})}:null
-    ].filter(Boolean)});
-  openReport(html,'MR_Weekly_Report_'+monday.toISOString().split('T')[0]+'.html');
+    ].filter(Boolean)
+  });
+  openReport(html);
 }
+
+
 
 function buildReportHTML({title,subtitle,dateLabel,period,stats,sections}) {
   const generated=new Date().toLocaleString('en-US',{month:'long',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
@@ -3393,11 +3455,21 @@ function buildReportHTML({title,subtitle,dateLabel,period,stats,sections}) {
     '</div></body></html>';
 }
 
-function openReport(html, filename) {
-  const blob=new Blob([html],{type:'text/html'});
-  const url=URL.createObjectURL(blob);
-  const win=window.open(url,'_blank');
-  if(!win){const a=document.createElement('a');a.href=url;a.download=filename;a.click();}
+function openReport(html) {
+  // Open a blank window synchronously (must be in click context),
+  // then write the report HTML into it after data loads
+  try {
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      return;
+    }
+  } catch(e) {}
+  // Popup blocked — navigate current tab to data URI
+  const enc = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+  window.location.href = enc;
 }
 
 // ── BOOT ──────────────────────────────────────────────────────────────────
