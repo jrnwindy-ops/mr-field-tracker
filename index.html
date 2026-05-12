@@ -1654,7 +1654,7 @@ async function render() {
     const homeBtn = document.getElementById('home-btn');
     if (!block) {
       if (homeBtn) homeBtn.style.display = 'none';
-      if (cloudOk) {
+      if (cloudOk && !_checkinPending) {
         try {
           await loadAllBlockStatuses();
         } catch(e) { console.warn(e); }
@@ -2207,23 +2207,24 @@ async function loadAllBlockStatuses() {
         block.lastIrrigation = new Date(irrig.irrig_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
       }
 
-      // Today's checkins
-      block.checkins = checkins
-        .filter(c => c.block_id === id)
-        .map(c => ({
-          time: c.created_at,
-          crew: c.crew,
-          foreman: c.foreman,
-          lat: c.lat,
-          lng: c.lng,
-          checkout: c.checkout || (CHECKED_OUT.has(normalizeTime(c.created_at)) ? new Date().toISOString() : null)
-        }))
-        // Filter to only checkins within 12 hours and not checked out
-        .filter(c => {
-          if (c.checkout) return true; // keep checked-out ones for history
-          const elapsed = new Date() - new Date(c.time);
-          return elapsed >= 0 && elapsed < 12 * 60 * 60 * 1000;
-        });
+      // Today's checkins — skip if a local checkin is pending cloud commit
+      if (!_checkinPending) {
+        block.checkins = checkins
+          .filter(c => c.block_id === id)
+          .map(c => ({
+            time: c.created_at,
+            crew: c.crew,
+            foreman: c.foreman,
+            lat: c.lat,
+            lng: c.lng,
+            checkout: c.checkout || (CHECKED_OUT.has(normalizeTime(c.created_at)) ? new Date().toISOString() : null)
+          }))
+          .filter(c => {
+            if (c.checkout) return true;
+            const elapsed = new Date() - new Date(c.time);
+            return elapsed >= 0 && elapsed < 12 * 60 * 60 * 1000;
+          });
+      }
 
       // Active tasks
       const blockTasks = tasks.filter(t => t.block_id === id);
@@ -2945,11 +2946,14 @@ async function doCheckin(blockId) {
             _checkinPending = false;
             console.warn('Checkin cloud save:', e);
           });
+        // Safety net — clear flag after 8s even if promise never resolves
+        setTimeout(() => { _checkinPending = false; }, 8000);
       }
 
-      // Re-render with local data immediately (skip cloud reload this time)
+      // Re-render block detail with local data immediately
       renderBlock(block, blockId);
       buildCheckinCard(blockId, block);
+      // Grid will update correctly when user navigates back (block.checkins already updated)
     } catch(e) {
       console.error('Checkin error:', e);
       if (btn) { btn.textContent = '\u2713 Confirm Arrival / Confirmar Llegada'; btn.disabled = false; }
