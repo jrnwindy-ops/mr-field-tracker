@@ -1930,7 +1930,7 @@ function buildCheckinCard(id, b) {
   // Only show check-in form if arriving via QR scan
   // Double check with CHECKED_OUT in case activeCheckin slipped through
   if (activeCheckin && CHECKED_OUT.has(normalizeTime(activeCheckin.time))) return;
-  if (!isQRScan && !activeCheckin) return;
+  // Show check-in form regardless of QR scan — allow manual check-in from block page
 
   const alreadyCheckedIn = !!activeCheckin;
 
@@ -1987,9 +1987,9 @@ function buildCheckinCard(id, b) {
 
   // Build check-in form
   card.innerHTML =
-    '<div style="font-size:42px;margin-bottom:8px">&#128204;</div>' +
-    '<div style="font-size:20px;font-weight:800;color:#1B4332;margin-bottom:6px">QR Check-In Detected</div>' +
-    '<div style="font-size:14px;color:#374151;margin-bottom:18px;line-height:1.6">Enter crew size and confirm arrival</div>';
+    '<div style="font-size:42px;margin-bottom:8px">' + (isQRScan ? '&#128204;' : '&#128205;') + '</div>' +
+    '<div style="font-size:20px;font-weight:800;color:#1B4332;margin-bottom:6px">' + (isQRScan ? 'QR Check-In / Registro QR' : 'Check In / Registrar Entrada') + '</div>' +
+    '<div style="font-size:14px;color:#374151;margin-bottom:18px;line-height:1.6">Enter crew size and confirm arrival / Ingrese el tamaño del equipo</div>';
 
   const row = document.createElement('div');
   row.style.cssText = 'display:flex;gap:10px;margin-bottom:16px;text-align:left';
@@ -2915,15 +2915,14 @@ async function doCheckin(blockId) {
       (lat ? ' (GPS: ' + lat + ', ' + lng + ')' : '');
     block.assignedTasks.unshift(entry);
     saveCheckin_cloud(blockId, {crew, foreman, lat, lng, accuracy});
-    // Restore button before render
-    const btn2 = document.querySelector('.checkin-btn');
-    if (btn2) { btn2.disabled = false; }
+    // Button will be replaced by render() — no need to restore
     render();
   }
 
-  // Show immediate feedback so user knows it registered
-  const btn = document.querySelector('.checkin-btn');
-  if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
+  // Show immediate feedback — find button by data attribute or tag inside checkin-section
+  const sec = document.querySelector('.checkin-section');
+  const btn = sec ? sec.querySelector('button:last-child') : null;
+  if (btn) { btn.textContent = 'Saving... / Guardando...'; btn.disabled = true; }
 
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
