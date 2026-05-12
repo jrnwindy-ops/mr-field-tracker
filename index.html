@@ -1387,18 +1387,22 @@ async function loadBlockData(blockId) {
       block.lastIrrigation = new Date(lastIrrig.irrig_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     }
 
-    // Restore checkins — but skip if a local checkin was just saved
-    // to prevent the cloud (which may not have it yet) from overwriting it
-    if (!_checkinPending) {
-      block.checkins = (checkinsRes.data || []).map(c => ({
-        time: c.created_at,
-        crew: c.crew,
-        foreman: c.foreman,
-        lat: c.lat,
-        lng: c.lng,
-        checkout: c.checkout || (CHECKED_OUT.has(normalizeTime(c.created_at)) ? new Date().toISOString() : null)
-      }));
-    }
+    // Rebuild checkins from cloud
+    const cloudCheckins = (checkinsRes.data || []).map(c => ({
+      time: c.created_at,
+      crew: c.crew,
+      foreman: c.foreman,
+      lat: c.lat,
+      lng: c.lng,
+      checkout: c.checkout || (CHECKED_OUT.has(normalizeTime(c.created_at)) ? new Date().toISOString() : null)
+    }));
+    // Merge: keep any local active checkin not yet in cloud
+    const cloudTimes = new Set(cloudCheckins.map(c => normalizeTime(c.time)));
+    const localOnly = (block.checkins || []).filter(c =>
+      !c.checkout && !cloudTimes.has(normalizeTime(c.time)) &&
+      (new Date() - new Date(c.time)) < 60000 // only if less than 1 min old
+    );
+    block.checkins = [...cloudCheckins, ...localOnly];
 
   } catch(e) {
     console.warn('loadBlockData error:', e);
@@ -1654,7 +1658,7 @@ async function render() {
     const homeBtn = document.getElementById('home-btn');
     if (!block) {
       if (homeBtn) homeBtn.style.display = 'none';
-      if (cloudOk && !_checkinPending) {
+      if (cloudOk) {
         try {
           await loadAllBlockStatuses();
         } catch(e) { console.warn(e); }
@@ -2207,24 +2211,29 @@ async function loadAllBlockStatuses() {
         block.lastIrrigation = new Date(irrig.irrig_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
       }
 
-      // Today's checkins — skip if a local checkin is pending cloud commit
-      if (!_checkinPending) {
-        block.checkins = checkins
-          .filter(c => c.block_id === id)
-          .map(c => ({
-            time: c.created_at,
-            crew: c.crew,
-            foreman: c.foreman,
-            lat: c.lat,
-            lng: c.lng,
-            checkout: c.checkout || (CHECKED_OUT.has(normalizeTime(c.created_at)) ? new Date().toISOString() : null)
-          }))
-          .filter(c => {
-            if (c.checkout) return true;
-            const elapsed = new Date() - new Date(c.time);
-            return elapsed >= 0 && elapsed < 12 * 60 * 60 * 1000;
-          });
-      }
+      // Today's checkins from cloud
+      const cloudCIs = checkins
+        .filter(c => c.block_id === id)
+        .map(c => ({
+          time: c.created_at,
+          crew: c.crew,
+          foreman: c.foreman,
+          lat: c.lat,
+          lng: c.lng,
+          checkout: c.checkout || (CHECKED_OUT.has(normalizeTime(c.created_at)) ? new Date().toISOString() : null)
+        }))
+        .filter(c => {
+          if (c.checkout) return true;
+          const elapsed = new Date() - new Date(c.time);
+          return elapsed >= 0 && elapsed < 12 * 60 * 60 * 1000;
+        });
+      // Keep any very recent local checkin not yet in cloud response
+      const cloudCITimes = new Set(cloudCIs.map(c => normalizeTime(c.time)));
+      const recentLocal = (block.checkins || []).filter(c =>
+        !c.checkout && !cloudCITimes.has(normalizeTime(c.time)) &&
+        (new Date() - new Date(c.time)) < 90000 // 90 sec grace window
+      );
+      block.checkins = [...cloudCIs, ...recentLocal];
 
       // Active tasks
       const blockTasks = tasks.filter(t => t.block_id === id);
@@ -2920,75 +2929,98 @@ async function doCheckin(blockId) {
   if (!block) return;
 
   // Read inputs
-  const crew = parseInt((document.getElementById('checkin-crew') || {}).value || 1);
-  const foreman = ((document.getElementById('checkin-foreman') || {}).value || '').trim();
+  const crewEl = document.getElementById('checkin-crew');
+  const foremanEl = document.getElementById('checkin-foreman');
+  const crew = parseInt((crewEl || {}).value || 1);
+  const foreman = ((foremanEl || {}).value || '').trim();
   const now = new Date();
-  const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
 
-  // Show immediate feedback
+  // Show feedback immediately
   const sec = document.querySelector('.checkin-section');
-  const btn = sec ? sec.querySelector('button:last-child') : null;
-  if (btn) { btn.textContent = 'Saving... / Guardando...'; btn.disabled = true; }
+  const btn = sec ? sec.querySelector('button') : null;
+  if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
 
-  function finishCheckin(lat, lng, accuracy) {
+  async function finish(lat, lng, accuracy) {
     try {
-      // Build checkin record
-      const checkin = { time: now.toISOString(), crew, foreman, lat, lng, accuracy };
-      if (!block.checkins) block.checkins = [];
-      block.checkins.push(checkin);
-      CHECKED_OUT.delete(normalizeTime(now.toISOString()));
+      // 1. Build the local checkin object using the same field names as the DB
+      const checkinRecord = {
+        block_id: blockId,
+        crew,
+        foreman: foreman || null,
+        lat: lat || null,
+        lng: lng || null,
+        accuracy: accuracy || null
+        // created_at is set by Supabase automatically
+      };
 
-      // Add to activity log
+      // 2. Save to Supabase and get back the created row (with created_at)
+      let savedTime = now.toISOString();
+      if (cloudOk) {
+        try {
+          const { data, error } = await sb.from('block_checkins')
+            .insert(checkinRecord)
+            .select()
+            .single();
+          if (error) throw error;
+          if (data && data.created_at) savedTime = data.created_at;
+          console.log('Checkin saved to cloud at', savedTime);
+        } catch(e) {
+          console.warn('Cloud checkin failed, using local only:', e);
+        }
+      }
+
+      // 3. Update local block data so UI updates immediately
+      if (!block.checkins) block.checkins = [];
+      const localCheckin = {
+        time: savedTime,
+        crew,
+        foreman,
+        lat: lat || null,
+        lng: lng || null,
+        accuracy: accuracy || null,
+        checkout: null
+      };
+      block.checkins.push(localCheckin);
+
+      // 4. Add to activity log display
+      const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
       const entry = now.toLocaleDateString() + ' ' + timeStr +
         ' - CHECK-IN: ' + crew + ' worker' + (crew > 1 ? 's' : '') +
-        (foreman ? ' - Foreman: ' + foreman : '') +
-        (lat ? ' (GPS)' : ' (no GPS)');
+        (foreman ? ' - ' + foreman : '') +
+        (lat ? ' (GPS)' : '');
       if (!block.assignedTasks) block.assignedTasks = [];
       block.assignedTasks.unshift(entry);
 
-      // Save to cloud non-blocking
-      _checkinPending = true;
-      // Safety net — always clear flag after 10s regardless
-      setTimeout(() => { _checkinPending = false; }, 10000);
+      // 5. Reload from cloud to get the canonical state (now including our insert)
       if (cloudOk) {
-        sb.from('block_checkins')
-          .insert({ block_id: blockId, crew, foreman, lat, lng, accuracy,
-            checked_in_at: now.toISOString() })
-          .then(() => {
-            _checkinPending = false;
-            console.log('Checkin saved to cloud');
-          })
-          .catch(e => {
-            _checkinPending = false;
-            console.warn('Checkin cloud save failed (saved locally):', e);
-          });
-      } else {
-        // No cloud — clear flag after short delay
-        setTimeout(() => { _checkinPending = false; }, 500);
+        try {
+          await loadBlockData(blockId);
+        } catch(e) { console.warn('Reload after checkin failed:', e); }
       }
 
-      // Re-render block detail with local data immediately
+      // 6. Re-render everything
       renderBlock(block, blockId);
       buildCheckinCard(blockId, block);
-      // Grid will update correctly when user navigates back (block.checkins already updated)
+
     } catch(e) {
-      console.error('Checkin error:', e);
-      if (btn) { btn.textContent = '\u2713 Confirm Arrival / Confirmar Llegada'; btn.disabled = false; }
+      console.error('Checkin failed:', e);
+      if (btn) { btn.textContent = '✓ Confirm Arrival / Confirmar Llegada'; btn.disabled = false; }
     }
   }
 
+  // Get GPS then finish
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
-      pos => finishCheckin(
+      pos => finish(
         pos.coords.latitude.toFixed(6),
         pos.coords.longitude.toFixed(6),
         Math.round(pos.coords.accuracy)
       ),
-      () => finishCheckin(null, null, null), // GPS denied or timed out
+      () => finish(null, null, null),
       { timeout: 5000, maximumAge: 60000 }
     );
   } else {
-    finishCheckin(null, null, null);
+    finish(null, null, null);
   }
 }
 
