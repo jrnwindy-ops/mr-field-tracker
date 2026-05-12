@@ -2898,42 +2898,67 @@ async function submitAssignTask() {
 async function doCheckin(blockId) {
   const block = BLOCKS[blockId];
   if (!block) return;
-  const crewInput = document.getElementById('checkin-crew');
-  const foremanInput = document.getElementById('checkin-foreman');
-  const crew = parseInt((crewInput || {}).value || 1);
-  const foreman = ((foremanInput || {}).value || '').trim();
+
+  // Read inputs
+  const crew = parseInt((document.getElementById('checkin-crew') || {}).value || 1);
+  const foreman = ((document.getElementById('checkin-foreman') || {}).value || '').trim();
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
 
-  function saveCheckin(lat, lng, accuracy) {
-    const checkin = { time: now.toISOString(), crew, foreman, lat, lng, accuracy };
-    block.checkins.push(checkin);
-    CHECKED_OUT.delete(normalizeTime(now.toISOString()));
-    const entry = now.toLocaleDateString() + ' ' + timeStr +
-      ' - CHECK-IN: ' + crew + ' worker' + (crew > 1 ? 's' : '') +
-      (foreman ? ' - Foreman: ' + foreman : '') +
-      (lat ? ' (GPS: ' + lat + ', ' + lng + ')' : '');
-    block.assignedTasks.unshift(entry);
-    saveCheckin_cloud(blockId, {crew, foreman, lat, lng, accuracy});
-    // Button will be replaced by render() — no need to restore
-    render();
-  }
-
-  // Show immediate feedback — find button by data attribute or tag inside checkin-section
+  // Show immediate feedback
   const sec = document.querySelector('.checkin-section');
   const btn = sec ? sec.querySelector('button:last-child') : null;
   if (btn) { btn.textContent = 'Saving... / Guardando...'; btn.disabled = true; }
 
+  function finishCheckin(lat, lng, accuracy) {
+    try {
+      // Build checkin record
+      const checkin = { time: now.toISOString(), crew, foreman, lat, lng, accuracy };
+      if (!block.checkins) block.checkins = [];
+      block.checkins.push(checkin);
+      CHECKED_OUT.delete(normalizeTime(now.toISOString()));
+
+      // Add to activity log
+      const entry = now.toLocaleDateString() + ' ' + timeStr +
+        ' - CHECK-IN: ' + crew + ' worker' + (crew > 1 ? 's' : '') +
+        (foreman ? ' - Foreman: ' + foreman : '') +
+        (lat ? ' (GPS)' : ' (no GPS)');
+      if (!block.assignedTasks) block.assignedTasks = [];
+      block.assignedTasks.unshift(entry);
+
+      // Save to cloud (non-blocking — don't await)
+      if (cloudOk) {
+        sb.from('block_checkins')
+          .insert({ block_id: blockId, crew, foreman, lat, lng, accuracy,
+            checked_in_at: now.toISOString() })
+          .then(() => {})
+          .catch(e => console.warn('Checkin cloud save:', e));
+      }
+
+      // Re-render immediately
+      render();
+    } catch(e) {
+      console.error('Checkin error:', e);
+      // Restore button on error
+      if (btn) { btn.textContent = '\u2713 Confirm Arrival / Confirmar Llegada'; btn.disabled = false; }
+    }
+  }
+
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
-      pos => saveCheckin(pos.coords.latitude.toFixed(6), pos.coords.longitude.toFixed(6), Math.round(pos.coords.accuracy)),
-      () => saveCheckin(null, null, null), // GPS failed — save without coords
+      pos => finishCheckin(
+        pos.coords.latitude.toFixed(6),
+        pos.coords.longitude.toFixed(6),
+        Math.round(pos.coords.accuracy)
+      ),
+      () => finishCheckin(null, null, null), // GPS denied or timed out
       { timeout: 5000, maximumAge: 60000 }
     );
   } else {
-    saveCheckin(null, null, null);
+    finishCheckin(null, null, null);
   }
 }
+
 
 // ── SCHEDULE ─────────────────────────────────────────────────────────────
 let _scheduleWeekOffset = 0;
