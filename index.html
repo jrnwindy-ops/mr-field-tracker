@@ -3465,6 +3465,11 @@ function makePin(color) {
   return L.divIcon({className:'',html:'<div style="width:16px;height:16px;border-radius:50%;background:'+color+';border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)"></div>',iconSize:[16,16],iconAnchor:[8,8],popupAnchor:[0,-10]});
 }
 
+function makeSquarePin(color) {
+  // Square pin used for outside-grower blocks (Double J, Wells Farms) so they're visually distinct
+  return L.divIcon({className:'',html:'<div style="width:16px;height:16px;background:'+color+';border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);transform:rotate(45deg)"></div>',iconSize:[16,16],iconAnchor:[8,8],popupAnchor:[0,-10]});
+}
+
 async function showMapView() {
   document.getElementById('map-container').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -3473,26 +3478,65 @@ async function showMapView() {
   await new Promise(resolve => setTimeout(resolve, 50));
   if (!_map) {
     _map = L.map('map-el', {zoomControl:true}).setView([36.50,-119.26], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap',maxZoom:18}).addTo(_map);
+    // Satellite base layer (Esri World Imagery, free, no API key)
+    const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+      attribution:'Imagery &copy; Esri',
+      maxZoom:19
+    });
+    const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'&copy; OpenStreetMap',
+      maxZoom:18
+    });
+    satLayer.addTo(_map);
+    // Layer toggle control
+    L.control.layers({'Satellite': satLayer, 'Streets': streetLayer}, null, {position:'topright'}).addTo(_map);
   } else { _map.invalidateSize(); }
-  _map.eachLayer(layer => { if (layer instanceof L.Marker) _map.removeLayer(layer); });
+  // Clear ALL feature layers before redrawing
+  _map.eachLayer(layer => {
+    if (layer instanceof L.Marker || layer instanceof L.Polygon) _map.removeLayer(layer);
+  });
   const bounds = [];
   Object.entries(BLOCKS).forEach(([id,b]) => {
     try {
-      if (!b.lat || !b.lng) return;
-      const lat=parseFloat(b.lat), lng=parseFloat(b.lng);
-      if (isNaN(lat)||isNaN(lng)) return;
       if (!b.assignedTasks) b.assignedTasks=[];
       if (!b.checkins) b.checkins=[];
       const color = getStatusColor(b);
       const status = getBlockStatus(b);
       const tpa = calcTreesPerAcre(b.spacing);
       const total = calcTotalTrees(b.spacing, b.acreage);
-      const marker = L.marker([lat,lng],{icon:makePin(color)});
-      marker.bindPopup('<div style="font-family:DM Sans,sans-serif;min-width:200px"><div style="background:#1B4332;color:#fff;padding:8px 10px;margin:-10px -10px 8px;border-radius:4px 4px 0 0"><div style="font-size:13px;font-weight:800">'+b.displayId+'</div><div style="font-size:11px;opacity:.8">'+b.ranch+'</div></div><div style="font-size:13px;font-weight:600;color:#111827;margin-bottom:4px">'+b.variety+'</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px"><div style="font-size:11px;color:#6B7280">Acreage: <strong>'+b.acreage+' ac</strong></div><div style="font-size:11px;color:#6B7280">Trees/acre: <strong>'+tpa+'</strong></div><div style="font-size:11px;color:#6B7280">Est. trees: <strong>'+total+'</strong></div><div style="font-size:11px;color:#6B7280">Planted: <strong>'+b.plantYear+'</strong></div></div><div style="display:flex;align-items:center;gap:5px;margin-bottom:8px"><div style="width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0"></div><span style="font-size:11px;font-weight:700;color:#374151">'+status.label+'</span></div><button data-blockid="'+id+'" onclick="_openMapBlock(this.dataset.blockid)" style="width:100%;background:#1B4332;color:#fff;border:none;border-radius:6px;padding:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">&#128205; Open Block Page</button></div>',{maxWidth:240});
-      marker.addTo(_map);
-      bounds.push([lat,lng]);
-    } catch(e) { console.warn('Marker error for',id,e); }
+      const managerBadge = b.manager && b.manager !== 'M&R'
+        ? '<div style="background:#7C3AED;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;display:inline-block;margin-bottom:4px">'+b.manager+'</div>'
+        : '';
+      const popupHtml = '<div style="font-family:DM Sans,sans-serif;min-width:200px"><div style="background:#1B4332;color:#fff;padding:8px 10px;margin:-10px -10px 8px;border-radius:4px 4px 0 0"><div style="font-size:13px;font-weight:800">'+b.displayId+'</div><div style="font-size:11px;opacity:.8">'+b.ranch+'</div></div>'+managerBadge+'<div style="font-size:13px;font-weight:600;color:#111827;margin-bottom:4px">'+b.variety+'</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px"><div style="font-size:11px;color:#6B7280">Acreage: <strong>'+b.acreage+' ac</strong></div><div style="font-size:11px;color:#6B7280">Trees/acre: <strong>'+tpa+'</strong></div><div style="font-size:11px;color:#6B7280">Est. trees: <strong>'+total+'</strong></div><div style="font-size:11px;color:#6B7280">Planted: <strong>'+b.plantYear+'</strong></div></div><div style="display:flex;align-items:center;gap:5px;margin-bottom:8px"><div style="width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0"></div><span style="font-size:11px;font-weight:700;color:#374151">'+status.label+'</span></div><button data-blockid="'+id+'" onclick="_openMapBlock(this.dataset.blockid)" style="width:100%;background:#1B4332;color:#fff;border:none;border-radius:6px;padding:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">&#128205; Open Block Page</button></div>';
+
+      // PREFER polygon if available, fall back to marker
+      if (b.polygon && Array.isArray(b.polygon) && b.polygon.length >= 3) {
+        const polygon = L.polygon(b.polygon, {
+          color: color,
+          weight: 2,
+          opacity: 0.95,
+          fillColor: color,
+          fillOpacity: 0.35
+        });
+        polygon.bindPopup(popupHtml, {maxWidth:240});
+        polygon.on('mouseover', function() {
+          this.setStyle({weight: 4, fillOpacity: 0.55});
+        });
+        polygon.on('mouseout', function() {
+          this.setStyle({weight: 2, fillOpacity: 0.35});
+        });
+        polygon.addTo(_map);
+        b.polygon.forEach(pt => bounds.push(pt));
+      } else if (b.lat && b.lng) {
+        const lat=parseFloat(b.lat), lng=parseFloat(b.lng);
+        if (isNaN(lat)||isNaN(lng)) return;
+        const isOutside = b.manager && b.manager !== 'M&R';
+        const marker = L.marker([lat,lng], {icon: isOutside ? makeSquarePin(color) : makePin(color)});
+        marker.bindPopup(popupHtml, {maxWidth:240});
+        marker.addTo(_map);
+        bounds.push([lat,lng]);
+      }
+    } catch(e) { console.warn('Map render error for', id, e); }
   });
   if (bounds.length > 0) _map.fitBounds(bounds, {padding:[30,30]});
   // Force Leaflet to recalculate size after container is visible
