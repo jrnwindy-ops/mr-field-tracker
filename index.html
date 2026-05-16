@@ -254,11 +254,7 @@ textarea.form-input{height:80px;resize:none}
 .leaflet-tooltip.block-label:before {
   display: none;
 }
-/* Hide labels when map is zoomed out to prevent overlap */
-.leaflet-container.zoomed-out .leaflet-tooltip.block-label {
-  opacity: 0;
-  pointer-events: none;
-}
+/* Labels controlled via JS (opacity on .leaflet-tooltip elements) */
 </style>
 </head>
 <body>
@@ -3515,24 +3511,27 @@ async function showMapView() {
     satLayer.addTo(_map);
     // Layer toggle control
     L.control.layers({'Satellite': satLayer, 'Streets': streetLayer}, null, {position:'topright'}).addTo(_map);
-    // Hide labels when zoomed out to prevent overlap; show when zoomed in
-    const ZOOM_LABEL_THRESHOLD = 14;
+    // Hide labels when zoomed out to prevent overlap; show when zoomed in.
+    // Uses direct DOM manipulation to bypass any CSS selector issues.
+    window._mapLabels = window._mapLabels || [];
     function updateLabelVisibility() {
-      const container = _map.getContainer();
-      if (_map.getZoom() < ZOOM_LABEL_THRESHOLD) {
-        container.classList.add('zoomed-out');
-      } else {
-        container.classList.remove('zoomed-out');
-      }
+      const ZOOM_LABEL_THRESHOLD = 14;
+      const showLabels = _map.getZoom() >= ZOOM_LABEL_THRESHOLD;
+      _mapLabels.forEach(layer => {
+        const tip = layer.getTooltip && layer.getTooltip();
+        if (!tip) return;
+        const el = tip.getElement && tip.getElement();
+        if (el) el.style.opacity = showLabels ? '0.9' : '0';
+      });
     }
     _map.on('zoomend', updateLabelVisibility);
-    // Apply initial state once labels are rendered
-    setTimeout(updateLabelVisibility, 200);
+    window._updateMapLabels = updateLabelVisibility;
   } else { _map.invalidateSize(); }
-  // Clear ALL feature layers before redrawing
+  // Clear ALL feature layers before redrawing, AND reset our label-tracking array
   _map.eachLayer(layer => {
     if (layer instanceof L.Marker || layer instanceof L.Polygon) _map.removeLayer(layer);
   });
+  window._mapLabels = [];
   const bounds = [];
   Object.entries(BLOCKS).forEach(([id,b]) => {
     try {
@@ -3571,6 +3570,7 @@ async function showMapView() {
           className: 'block-label',
           opacity: 0.9
         });
+        _mapLabels.push(polygon);
         b.polygon.forEach(pt => bounds.push(pt));
       } else if (b.lat && b.lng) {
         const lat=parseFloat(b.lat), lng=parseFloat(b.lng);
@@ -3586,6 +3586,7 @@ async function showMapView() {
           opacity: 0.9
         });
         marker.addTo(_map);
+        _mapLabels.push(marker);
         bounds.push([lat,lng]);
       }
     } catch(e) { console.warn('Map render error for', id, e); }
@@ -3594,6 +3595,8 @@ async function showMapView() {
   // Force Leaflet to recalculate size after container is visible
   setTimeout(() => { _map.invalidateSize(); }, 100);
   setTimeout(() => { _map.invalidateSize(); }, 400);
+  // Apply label visibility after tooltips are rendered + after fitBounds settles
+  setTimeout(() => { if (window._updateMapLabels) window._updateMapLabels(); }, 500);
 }
 
 window._openMapBlock = function(blockId) {
