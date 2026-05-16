@@ -249,9 +249,15 @@ textarea.form-input{height:80px;resize:none}
   letter-spacing: 0.02em;
   white-space: nowrap;
   pointer-events: none;
+  transition: opacity 0.2s;
 }
 .leaflet-tooltip.block-label:before {
   display: none;
+}
+/* Hide labels when map is zoomed out to prevent overlap */
+.leaflet-container.zoomed-out .leaflet-tooltip.block-label {
+  opacity: 0;
+  pointer-events: none;
 }
 </style>
 </head>
@@ -3509,6 +3515,19 @@ async function showMapView() {
     satLayer.addTo(_map);
     // Layer toggle control
     L.control.layers({'Satellite': satLayer, 'Streets': streetLayer}, null, {position:'topright'}).addTo(_map);
+    // Hide labels when zoomed out to prevent overlap; show when zoomed in
+    const ZOOM_LABEL_THRESHOLD = 14;
+    function updateLabelVisibility() {
+      const container = _map.getContainer();
+      if (_map.getZoom() < ZOOM_LABEL_THRESHOLD) {
+        container.classList.add('zoomed-out');
+      } else {
+        container.classList.remove('zoomed-out');
+      }
+    }
+    _map.on('zoomend', updateLabelVisibility);
+    // Apply initial state once labels are rendered
+    setTimeout(updateLabelVisibility, 200);
   } else { _map.invalidateSize(); }
   // Clear ALL feature layers before redrawing
   _map.eachLayer(layer => {
