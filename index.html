@@ -2539,6 +2539,50 @@ function closeSchedule() {
 // ── SAVE TASK DATE ─────────────────────────────────────────────────────────
 let _schedBlockId = null, _schedTaskStr = null;
 
+async function deleteTask(blockId, lookupKey) {
+  const block = BLOCKS[blockId];
+  if (!block) return;
+  const taskStr = (window._taskLookup && window._taskLookup[lookupKey]) || '';
+  if (!taskStr) {
+    console.warn('deleteTask: task not found in lookup', lookupKey);
+    return;
+  }
+  // Extract the task label (without the TASK: prefix and any [YYYY-MM-DD] date prefix)
+  let label = taskStr.replace('TASK:', '').trim();
+  const dateMatch = label.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*/);
+  if (dateMatch) label = label.replace(dateMatch[0], '').trim();
+
+  if (!confirm('Remove task: "' + label + '"?')) return;
+
+  // 1. Remove from local memory
+  const idx = block.assignedTasks.indexOf(taskStr);
+  if (idx > -1) block.assignedTasks.splice(idx, 1);
+
+  // 2. Mark deleted in Supabase. Try matching by exact task text first,
+  //    then by the bare label (without TASK: prefix or date) for legacy rows.
+  if (cloudOk) {
+    try {
+      const candidates = [label, 'TASK: ' + label, taskStr.replace('TASK:','').trim()];
+      const uniq = [...new Set(candidates)];
+      let updated = 0;
+      for (const candidate of uniq) {
+        const { data, error } = await sb.from('block_tasks')
+          .update({ status: 'deleted', completed_at: new Date().toISOString() })
+          .eq('block_id', blockId)
+          .eq('task', candidate)
+          .eq('status', 'pending')
+          .select();
+        if (error) { console.warn('deleteTask cloud update error:', error); continue; }
+        if (data && data.length) { updated += data.length; break; }
+      }
+      if (updated === 0) console.warn('deleteTask: no matching cloud row for', label);
+      else console.log('deleteTask: marked', updated, 'cloud row(s) as deleted');
+    } catch(e) { console.warn('deleteTask cloud error:', e); }
+  }
+
+  render();
+}
+
 function scheduleTaskDate(blockId, lookupKey) {
   _schedBlockId = blockId;
   _schedTaskStr = (window._taskLookup && window._taskLookup[lookupKey]) || '';
