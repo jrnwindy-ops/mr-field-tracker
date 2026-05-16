@@ -1389,6 +1389,7 @@ async function loadBlockData(blockId) {
 
     // Rebuild checkins from cloud
     const cloudCheckins = (checkinsRes.data || []).map(c => ({
+      id: c.id,
       time: c.created_at,
       crew: c.crew,
       foreman: c.foreman,
@@ -2215,6 +2216,7 @@ async function loadAllBlockStatuses() {
       const cloudCIs = checkins
         .filter(c => c.block_id === id)
         .map(c => ({
+          id: c.id,
           time: c.created_at,
           crew: c.crew,
           foreman: c.foreman,
@@ -2673,11 +2675,24 @@ async function confirmCheckout(blockId, checkin, completedTasks, notes) {
   block.assignedTasks.unshift(entry);
   if (cloudOk) {
     try {
-      const {data: rows} = await sb.from('block_checkins').select('id')
-        .eq('block_id', blockId).is('checkout', null)
-        .order('created_at', {ascending: false}).limit(1);
-      if (rows && rows.length > 0) {
-        await sb.from('block_checkins').update({checkout: now.toISOString()}).eq('id', rows[0].id);
+      // Prefer direct ID update (reliable). Fall back to heuristic only if id is missing.
+      if (checkin.id) {
+        const {error: upErr} = await sb.from('block_checkins')
+          .update({checkout: now.toISOString()})
+          .eq('id', checkin.id);
+        if (upErr) console.warn('Direct checkout update failed:', upErr);
+        else console.log('Checkout saved to cloud for id:', checkin.id);
+      } else {
+        // Legacy fallback: find by block + null checkout
+        const {data: rows} = await sb.from('block_checkins').select('id')
+          .eq('block_id', blockId).is('checkout', null)
+          .order('created_at', {ascending: false}).limit(1);
+        if (rows && rows.length > 0) {
+          await sb.from('block_checkins').update({checkout: now.toISOString()}).eq('id', rows[0].id);
+          console.log('Checkout saved to cloud (fallback) for id:', rows[0].id);
+        } else {
+          console.warn('No matching cloud check-in to mark as checked out');
+        }
       }
       for (const task of completedTasks) {
         const label = task.replace('TASK:','').trim();
@@ -2953,8 +2968,9 @@ async function doCheckin(blockId) {
         // created_at is set by Supabase automatically
       };
 
-      // 2. Save to Supabase and get back the created row (with created_at)
+      // 2. Save to Supabase and get back the created row (with created_at AND id)
       let savedTime = now.toISOString();
+      let savedId = null;
       if (cloudOk) {
         try {
           const { data, error } = await sb.from('block_checkins')
@@ -2963,7 +2979,8 @@ async function doCheckin(blockId) {
             .single();
           if (error) throw error;
           if (data && data.created_at) savedTime = data.created_at;
-          console.log('Checkin saved to cloud at', savedTime);
+          if (data && data.id) savedId = data.id;
+          console.log('Checkin saved to cloud at', savedTime, 'id:', savedId);
         } catch(e) {
           console.warn('Cloud checkin failed, using local only:', e);
         }
@@ -2972,6 +2989,7 @@ async function doCheckin(blockId) {
       // 3. Update local block data so UI updates immediately
       if (!block.checkins) block.checkins = [];
       const localCheckin = {
+        id: savedId,
         time: savedTime,
         crew,
         foreman,
