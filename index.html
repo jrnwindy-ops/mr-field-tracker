@@ -234,6 +234,25 @@ textarea.form-input{height:80px;resize:none}
 .assign-tag{display:inline-flex;align-items:center;gap:4px;background:var(--g50);border:1px solid var(--g200);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--g800);margin:3px;cursor:pointer;transition:background .15s}
 .assign-tag:hover{background:var(--g100)}
 
+
+/* Block ID labels on map polygons/markers */
+.leaflet-tooltip.block-label {
+  background: rgba(27, 67, 50, 0.85);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'DM Sans', sans-serif;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.leaflet-tooltip.block-label:before {
+  display: none;
+}
 </style>
 </head>
 <body>
@@ -3526,6 +3545,13 @@ async function showMapView() {
           this.setStyle({weight: 2, fillOpacity: 0.35});
         });
         polygon.addTo(_map);
+        // Permanent label with the display ID at the polygon's center
+        polygon.bindTooltip(b.displayId, {
+          permanent: true,
+          direction: 'center',
+          className: 'block-label',
+          opacity: 0.9
+        });
         b.polygon.forEach(pt => bounds.push(pt));
       } else if (b.lat && b.lng) {
         const lat=parseFloat(b.lat), lng=parseFloat(b.lng);
@@ -3533,6 +3559,13 @@ async function showMapView() {
         const isOutside = b.manager && b.manager !== 'M&R';
         const marker = L.marker([lat,lng], {icon: isOutside ? makeSquarePin(color) : makePin(color)});
         marker.bindPopup(popupHtml, {maxWidth:240});
+        marker.bindTooltip(b.displayId, {
+          permanent: true,
+          direction: 'top',
+          offset: [0, -10],
+          className: 'block-label',
+          opacity: 0.9
+        });
         marker.addTo(_map);
         bounds.push([lat,lng]);
       }
